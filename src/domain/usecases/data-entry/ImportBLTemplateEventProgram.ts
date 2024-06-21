@@ -63,7 +63,6 @@ export class ImportBLTemplateEventProgram {
                             return this.buildEventsPayload(
                                 dataPackage,
                                 action,
-                                period,
                                 eventListFileId,
                                 calculatedEventListFileId
                             ).flatMap(events => {
@@ -206,7 +205,6 @@ export class ImportBLTemplateEventProgram {
     private buildEventsPayload(
         dataPackage: DataPackage,
         action: ImportStrategy,
-        dataSubmissionPeriod: string,
         eventListFileId: string | undefined,
         calculatedEventListFileId?: string
     ): FutureData<D2TrackerEvent[]> {
@@ -216,7 +214,7 @@ export class ImportBLTemplateEventProgram {
                     ({ id, orgUnit, period, attribute, dataValues, dataForm, coordinate }, index) => {
                         const occurredAt =
                             dataForm === AMC_RAW_SUBSTANCE_CONSUMPTION_PROGRAM_ID
-                                ? moment(new Date(`${dataSubmissionPeriod}-01-01`))
+                                ? moment(new Date(`${period.split("-").at(0)}-01-01`))
                                       .toISOString()
                                       .split("T")
                                       .at(0) ?? period
@@ -355,32 +353,30 @@ export const mapToImportSummary = (
         );
 
         const blockingErrorsByGroup = _(blockingErrorList).groupBy("error").value();
+        const eventIdsInBlockingErrors = Object.keys(_(blockingErrorList).groupBy("eventId").value());
 
-        //Get list of DataElement Ids in error messages.
-        const dataElementIds = _.compact(
+        //Get list of any d2-Ids in error messages.
+        const d2Ids = _(
             Object.entries(blockingErrorsByGroup).map(err => {
                 const errMsg = err[0];
 
-                //Error message type 1 contains regex in format : DataElement `{dataElementId}`
-                const pattern1 = /(?<=DataElement )`([A-Za-z0-9]{11})`/g;
-                const dataelementIds1 = pattern1.exec(errMsg);
+                //Error message type 2 contains  regex in format : {id}
+                const uuidPattern = /\b([A-Za-z0-9]{11})\b/g;
+                const uuidMatches = errMsg.match(uuidPattern);
+                const uuidMatchesWithoutEventId = uuidMatches?.filter(
+                    match => !eventIdsInBlockingErrors.includes(match)
+                );
 
-                //Error message type 2 contains  regex in format : {dataElementId} DataElement
-                const pattern2 = /([A-Za-z0-9]{11}) DataElement/g;
-                const dataelementsIds2 = pattern2.exec(errMsg);
-
-                //Error message type 3 contains  regex in format : `DataElement``{dataElementId}`
-                const pattern3 = /`(DataElement)` `([A-Za-z0-9]{11})`/g;
-                const dataelementsIds3 = pattern3.exec(errMsg);
-
-                if (dataelementIds1 && dataelementIds1[1]) return dataelementIds1[1];
-                else if (dataelementsIds2 && dataelementsIds2[1]) return dataelementsIds2[1];
-                else if (dataelementsIds3 && dataelementsIds3[1]) return dataelementsIds3[2];
+                if (uuidMatchesWithoutEventId) return uuidMatchesWithoutEventId;
             })
-        );
+        )
+            .compact()
+            .uniq()
+            .flatten()
+            .value();
 
         //Get list of DataElement Names in error messages.
-        return metadataRepository.getDataElementNames(dataElementIds).flatMap(dataElementMap => {
+        return metadataRepository.getD2Ids(_.uniq(d2Ids)).flatMap(d2IdsMap => {
             const importSummary: ImportSummary = {
                 status: result.status === "OK" ? "SUCCESS" : result.status,
                 importCount: {
@@ -390,29 +386,23 @@ export const mapToImportSummary = (
                     deleted: result.stats.deleted,
                 },
                 blockingErrors: Object.entries(blockingErrorsByGroup).map(err => {
-                    const dataElementInErrMsg = dataElementIds.filter(de => err[0].includes(de));
+                    const errMsg = err[0];
 
-                    if (dataElementInErrMsg && dataElementInErrMsg[0] && dataElementInErrMsg.length === 1) {
-                        //There should be only one dataelement id in each errMsg
+                    const parsedErrMsg = d2Ids.reduce((currentMessage, id) => {
+                        return currentMessage.includes(id)
+                            ? currentMessage.replace(
+                                  new RegExp(id, "g"),
+                                  d2IdsMap.find(ref => ref.id === id)?.name ?? id
+                              )
+                            : currentMessage;
+                    }, errMsg);
 
-                        const dataElementName = dataElementMap.find(de => de.id === dataElementInErrMsg[0]);
-                        //Replace DataElement Ids with DataElement Names in error messages.
-                        const parsedErrMsg = err[0].replace(
-                            dataElementInErrMsg[0],
-                            dataElementName?.name ?? dataElementInErrMsg[0]
-                        );
-
-                        const lines = err[1].flatMap(a => eventIdLineNoMap?.find(e => e.id === a.eventId)?.lineNo);
-                        console.debug(lines);
-                        return {
-                            error: parsedErrMsg,
-                            count: err[1].length,
-                            lines: _.compact(lines),
-                        };
-                    } else {
-                        const lines = err[1].flatMap(a => eventIdLineNoMap?.find(e => e.id === a.eventId)?.lineNo);
-                        return { error: err[0], count: err[1].length, lines: _.compact(lines) };
-                    }
+                    const lines = err[1].flatMap(a => eventIdLineNoMap?.find(e => e.id === a.eventId)?.lineNo);
+                    return {
+                        error: parsedErrMsg,
+                        count: err[1].length,
+                        lines: _.compact(lines),
+                    };
                 }),
                 nonBlockingErrors: nonBlockingErrors ? nonBlockingErrors : [],
                 importTime: new Date(),
@@ -475,7 +465,7 @@ export const formatDhis2Value = (item: DataPackageDataValue, dataForm: DataForm)
         return booleanValue ? { ...item, value: true } : undefined;
     }
 
-    const selectedOption = dataElement?.options?.find(({ id }) => item.value === id);
+    const selectedOption = dataElement?.options?.find(({ id }) => item.optionId === id);
     const value = selectedOption?.code ?? item.value;
     return { ...item, value };
 };

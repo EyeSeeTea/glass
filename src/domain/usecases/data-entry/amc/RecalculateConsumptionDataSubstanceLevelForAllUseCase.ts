@@ -2,8 +2,11 @@ import _ from "lodash";
 import { logger } from "../../../../utils/logger";
 import { Id } from "../../../entities/Ref";
 import { Future, FutureData } from "../../../entities/Future";
-import { GlassATCVersion } from "../../../entities/GlassATC";
-import { SALT_MAPPING } from "../../../entities/data-entry/amc/Salt";
+import {
+    CODE_PRODUCT_NOT_HAVE_ATC,
+    DEFAULT_SALT_CODE,
+    GlassAtcVersionData,
+} from "../../../entities/GlassAtcVersionData";
 import { RawSubstanceConsumptionData } from "../../../entities/data-entry/amc/RawSubstanceConsumptionData";
 import { SubstanceConsumptionCalculated } from "../../../entities/data-entry/amc/SubstanceConsumptionCalculated";
 import { GlassATCRepository } from "../../../repositories/GlassATCRepository";
@@ -22,13 +25,13 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
         orgUnitsIds: Id[],
         periods: string[],
         currentATCVersion: string,
-        currentATCData: GlassATCVersion,
+        currentATCData: GlassAtcVersionData,
         allowCreationIfNotExist: boolean
     ): FutureData<void> {
         logger.info(
-            `Calculate consumption data of substance level for orgUnitsIds=${orgUnitsIds.join(
+            `[${new Date().toISOString()}] Calculate consumption data of substance level for orgUnitsIds=${orgUnitsIds.join(
                 ","
-            )} and periods=${periods.join(",")}`
+            )} and periods=${periods.join(",")}. Current ATC version ${currentATCVersion}`
         );
         return Future.sequential(
             orgUnitsIds.map(orgUnitId => {
@@ -51,10 +54,12 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
         orgUnitId: Id,
         period: string,
         currentATCVersion: string,
-        currentATCData: GlassATCVersion,
+        currentATCData: GlassAtcVersionData,
         allowCreationIfNotExist: boolean
     ): FutureData<void> {
-        logger.info(`Calculating consumption data of substance level for orgUnitsId ${orgUnitId} and period ${period}`);
+        logger.info(
+            `[${new Date().toISOString()}] Calculating consumption data of substance level for orgUnitsId ${orgUnitId} and period ${period}`
+        );
         return this.getDataForRecalculations(orgUnitId, period).flatMap(
             ({ rawSubstanceConsumptionData, currentCalculatedConsumptionData }) => {
                 return getConsumptionDataSubstanceLevel({
@@ -67,7 +72,7 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
                 }).flatMap(newCalculatedConsumptionData => {
                     if (_.isEmpty(newCalculatedConsumptionData)) {
                         logger.error(
-                            `Substance level: there are no new calculated data to update current data for orgUnitId ${orgUnitId} and period ${period}`
+                            `[${new Date().toISOString()}] Substance level: there are no new calculated data to update current data for orgUnitId ${orgUnitId} and period ${period}`
                         );
                         return Future.success(undefined);
                     }
@@ -77,7 +82,7 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
                         (!currentCalculatedConsumptionData || _.isEmpty(currentCalculatedConsumptionData))
                     ) {
                         logger.error(
-                            `Substance level: there are no current calculated data to update for orgUnitId ${orgUnitId} and period ${period}`
+                            `[${new Date().toISOString()}] Substance level: there are no current calculated data to update for orgUnitId ${orgUnitId} and period ${period}`
                         );
                         return Future.success(undefined);
                     }
@@ -98,28 +103,23 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
 
                     if (eventIdsNoUpdated.length) {
                         logger.error(
-                            `Substance level: these events could not be updated events=${eventIdsNoUpdated.join(",")}`
+                            `[${new Date().toISOString()}] Substance level: these events could not be updated events=${eventIdsNoUpdated.join(
+                                ","
+                            )}`
                         );
                     }
 
-                    logger.debug(
-                        `Updating calculations of substance level events in DHIS2 for orgUnitId ${orgUnitId} and period ${period}: events=${eventIdsToUpdate.join(
+                    logger.info(
+                        `[${new Date().toISOString()}] Updating calculations of substance level events in DHIS2 for orgUnitId ${orgUnitId} and period ${period}: events=${eventIdsToUpdate.join(
                             ","
                         )}`
                     );
-                    logger.info(
-                        `Updating calculations of substance level for ${eventIdsToUpdate.length} events in DHIS2 for orgUnitId ${orgUnitId} and period ${period}`
-                    );
 
                     if (allowCreationIfNotExist && newCalculatedConsumptionDataWithoutIds.length) {
-                        logger.debug(
-                            `Creating calculated consumption data events in DHIS2 for orgUnitId ${orgUnitId} and period ${period}: events=${JSON.stringify(
+                        logger.info(
+                            `[${new Date().toISOString()}] Creating calculated consumption data events in DHIS2 for orgUnitId ${orgUnitId} and period ${period}: events=${JSON.stringify(
                                 newCalculatedConsumptionDataWithoutIds
                             )}`
-                        );
-
-                        logger.info(
-                            `Creating calculated consumption data for ${newCalculatedConsumptionDataWithoutIds.length} events in DHIS2 for orgUnitId ${orgUnitId} and period ${period}`
                         );
                     }
 
@@ -134,7 +134,7 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
                         .flatMap(({ response }) => {
                             if (response.status === "OK") {
                                 logger.success(
-                                    `Calculations of substance level updated for orgUnitId ${orgUnitId} and period ${period}: ${
+                                    `[${new Date().toISOString()}] Calculations of substance level updated for orgUnitId ${orgUnitId} and period ${period}: ${
                                         response.stats.updated
                                     } of ${response.stats.total} events updated${
                                         allowCreationIfNotExist
@@ -145,14 +145,14 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
                             }
                             if (response.status === "ERROR") {
                                 logger.error(
-                                    `Error updating calculations of substance level updated for orgUnitId ${orgUnitId} and period ${period}: ${JSON.stringify(
+                                    `[${new Date().toISOString()}] Error updating calculations of substance level updated for orgUnitId ${orgUnitId} and period ${period}: ${JSON.stringify(
                                         response.validationReport.errorReports
                                     )}`
                                 );
                             }
                             if (response.status === "WARNING") {
                                 logger.warn(
-                                    `Warning updating calculations of substance level updated for orgUnitId ${orgUnitId} and period ${period}: updated=${
+                                    `[${new Date().toISOString()}] Warning updating calculations of substance level updated for orgUnitId ${orgUnitId} and period ${period}: updated=${
                                         response.stats.updated
                                     }, ${allowCreationIfNotExist ? `created=${response.stats.created}, ` : ""} total=${
                                         response.stats.total
@@ -174,7 +174,7 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
         currentCalculatedConsumptionData: SubstanceConsumptionCalculated[] | undefined;
     }> {
         logger.info(
-            `Getting raw substance consumption data and current calculated consumption data for orgUnitId ${orgUnitId} and period ${period}`
+            `[${new Date().toISOString()}] Getting raw substance consumption data and current calculated consumption data for orgUnitId ${orgUnitId} and period ${period}`
         );
         return Future.joinObj({
             rawSubstanceConsumptionData: this.amcSubstanceDataRepository.getAllRawSubstanceConsumptionDataByByPeriod(
@@ -183,6 +183,14 @@ export class RecalculateConsumptionDataSubstanceLevelForAllUseCase {
             ),
             currentCalculatedConsumptionData:
                 this.amcSubstanceDataRepository.getAllCalculatedSubstanceConsumptionDataByByPeriod(orgUnitId, period),
+        }).flatMap(({ rawSubstanceConsumptionData, currentCalculatedConsumptionData }) => {
+            const validRawSubstanceConsumptionData = rawSubstanceConsumptionData?.filter(
+                ({ atc_manual }) => atc_manual !== CODE_PRODUCT_NOT_HAVE_ATC
+            );
+            return Future.success({
+                rawSubstanceConsumptionData: validRawSubstanceConsumptionData,
+                currentCalculatedConsumptionData,
+            });
         });
     }
 }
@@ -213,7 +221,7 @@ function linkEventIdToNewCalculatedConsumptionData(
                     currentCalculatedData.atc_autocalculated === newCalulatedData.atc_autocalculated &&
                     currentCalculatedData.route_admin_autocalculated === newCalulatedData.route_admin_autocalculated &&
                     (currentCalculatedData.salt_autocalculated === newCalulatedData.salt_autocalculated ||
-                        SALT_MAPPING.default === newCalulatedData.salt_autocalculated) &&
+                        DEFAULT_SALT_CODE === newCalulatedData.salt_autocalculated) &&
                     currentCalculatedData.packages_autocalculated === newCalulatedData.packages_autocalculated &&
                     currentCalculatedData.tons_autocalculated === newCalulatedData.tons_autocalculated &&
                     currentCalculatedData.health_sector_autocalculated ===

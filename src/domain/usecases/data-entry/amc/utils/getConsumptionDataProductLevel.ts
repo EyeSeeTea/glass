@@ -4,7 +4,7 @@ import {
 } from "../../../../../data/repositories/data-entry/AMCProductDataDefaultRepository";
 import { logger } from "../../../../../utils/logger";
 import { Future, FutureData } from "../../../../entities/Future";
-import { GlassATCVersion } from "../../../../entities/GlassATC";
+import { GlassAtcVersionData } from "../../../../entities/GlassAtcVersionData";
 import { Id } from "../../../../entities/Ref";
 import {
     Attributes,
@@ -34,7 +34,7 @@ export function getConsumptionDataProductLevel(params: {
     period: string;
     productRegisterProgramMetadata: ProductRegisterProgramMetadata | undefined;
     productDataTrackedEntities: ProductDataTrackedEntity[];
-    atcCurrentVersionData: GlassATCVersion;
+    atcCurrentVersionData: GlassAtcVersionData;
     atcVersionKey: string;
 }): FutureData<RawSubstanceConsumptionCalculated[]> {
     const {
@@ -47,10 +47,19 @@ export function getConsumptionDataProductLevel(params: {
     } = params;
 
     if (!productRegisterProgramMetadata) {
-        logger.error(`Cannot find Product Register program metadata for orgUnitId ${orgUnitId} and period ${period}`);
+        logger.error(
+            `[${new Date().toISOString()}] Cannot find Product Register program metadata for orgUnitId ${orgUnitId} and period ${period}`
+        );
         return Future.error(
             `Cannot find Product Register program metadata for orgUnitId ${orgUnitId} and period ${period}`
         );
+    }
+
+    if (!productDataTrackedEntities) {
+        logger.error(
+            `[${new Date().toISOString()}] Cannot find Product Register Data for orgUnitsId ${orgUnitId} and period ${period} for calculations`
+        );
+        return Future.error("Cannot find Product Register Data");
     }
 
     const rawProductConsumptionStage = productRegisterProgramMetadata?.programStages.find(
@@ -59,7 +68,7 @@ export function getConsumptionDataProductLevel(params: {
 
     if (!rawProductConsumptionStage) {
         logger.error(
-            `Cannot find Raw Product Consumption program stage metadata for orgUnitId ${orgUnitId} and period ${period} with id ${AMC_RAW_PRODUCT_CONSUMPTION_STAGE_ID}`
+            `[${new Date().toISOString()}] Cannot find Raw Product Consumption program stage metadata for orgUnitId ${orgUnitId} and period ${period} with id ${AMC_RAW_PRODUCT_CONSUMPTION_STAGE_ID}`
         );
         return Future.error(
             `Cannot find Raw Product Consumption program stage metadata for orgUnitId ${orgUnitId} and period ${period} with id ${AMC_RAW_PRODUCT_CONSUMPTION_STAGE_ID}`
@@ -139,7 +148,7 @@ function getProductRegistryAttributes(
                             [programAttribute.code]: programAttribute.optionSetValue
                                 ? programAttribute.optionSet.options.find(
                                       option => option.code === productAttribute.value
-                                  )?.name
+                                  )?.code
                                 : productAttribute.value,
                         };
                     case "NUMBER":
@@ -151,7 +160,7 @@ function getProductRegistryAttributes(
                             [programAttribute.code]: programAttribute.optionSetValue
                                 ? programAttribute.optionSet.options.find(
                                       option => option.code === productAttribute.value
-                                  )?.name
+                                  )?.code
                                 : parseFloat(productAttribute.value),
                         };
                     default:
@@ -186,7 +195,7 @@ function getRawProductConsumption(
                                 [programStageDataElement.code]: programStageDataElement.optionSetValue
                                     ? programStageDataElement.optionSet.options.find(
                                           option => option.code === eventDataValue.value
-                                      )?.name
+                                      )?.code
                                     : eventDataValue.value,
                             };
                         case "NUMBER":
@@ -198,7 +207,7 @@ function getRawProductConsumption(
                                 [programStageDataElement.code]: programStageDataElement.optionSetValue
                                     ? programStageDataElement.optionSet.options.find(
                                           option => option.code === eventDataValue.value
-                                      )?.name
+                                      )?.code
                                     : parseFloat(eventDataValue.value),
                             };
                         default:

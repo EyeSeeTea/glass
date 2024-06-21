@@ -1,6 +1,6 @@
 import { Id } from "@eyeseetea/d2-api";
 import { Future, FutureData } from "../../../../entities/Future";
-import { GlassATCVersion } from "../../../../entities/GlassATC";
+import { GlassAtcVersionData } from "../../../../entities/GlassAtcVersionData";
 import { RawSubstanceConsumptionData } from "../../../../entities/data-entry/amc/RawSubstanceConsumptionData";
 import { SubstanceConsumptionCalculated } from "../../../../entities/data-entry/amc/SubstanceConsumptionCalculated";
 import { GlassATCRepository } from "../../../../repositories/GlassATCRepository";
@@ -11,7 +11,7 @@ export function getConsumptionDataSubstanceLevel(params: {
     orgUnitId: Id;
     period: string;
     rawSubstanceConsumptionData: RawSubstanceConsumptionData[] | undefined;
-    atcCurrentVersionData: GlassATCVersion;
+    atcCurrentVersionData: GlassAtcVersionData;
     currentAtcVersionKey: string;
     atcRepository: GlassATCRepository;
 }): FutureData<SubstanceConsumptionCalculated[]> {
@@ -24,7 +24,9 @@ export function getConsumptionDataSubstanceLevel(params: {
         currentAtcVersionKey,
     } = params;
     if (!rawSubstanceConsumptionData) {
-        logger.error(`Cannot find Raw Substance Consumption Data for orgUnitsId ${orgUnitId} and period ${period}`);
+        logger.error(
+            `[${new Date().toISOString()}] Cannot find Raw Substance Consumption Data for orgUnitsId ${orgUnitId} and period ${period} for calculations`
+        );
         return Future.error("Cannot find Raw Substance Consumption Data");
     }
 
@@ -36,7 +38,7 @@ export function getConsumptionDataSubstanceLevel(params: {
         const keysNotFound = atcVersionKeys.filter(key => !Object.keys(atcVersionsByKeys).includes(key));
         if (keysNotFound.length) {
             logger.error(
-                `ATC data not found for these versions: ${keysNotFound.join(
+                `[${new Date().toISOString()}] ATC data not found for these versions: ${keysNotFound.join(
                     ","
                 )}. Calculated consumption data for raw substance consumption data with these ATC versions manual will not be calculated.`
             );

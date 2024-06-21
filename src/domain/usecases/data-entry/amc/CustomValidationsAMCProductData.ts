@@ -4,7 +4,7 @@ import { ConsistencyError } from "../../../entities/data-entry/ImportSummary";
 import { ValidationResult } from "../../../entities/program-rules/EventEffectTypes";
 import { D2TrackerTrackedEntity } from "@eyeseetea/d2-api/api/trackerTrackedEntities";
 import { GlassATCDefaultRepository } from "../../../../data/repositories/GlassATCDefaultRepository";
-import { GlassATCVersion } from "../../../entities/GlassATC";
+import { GlassAtcVersionData, LAST_ATC_CODE_LEVEL, getAtcCodeByLevel } from "../../../entities/GlassAtcVersionData";
 import { AMCProductDataRepository } from "../../../repositories/data-entry/AMCProductDataRepository";
 
 const AMR_GLASS_AMC_TEA_ATC = "aK1JpD14imM";
@@ -13,11 +13,13 @@ const AMR_GLASS_AMC_TEA_ROUTE_ADMIN = "m4eyu3tO5IV";
 const AMR_GLASS_AMC_TEA_SALT = "K8wjLXjYFzf";
 const AMR_GLASS_AMC_TEA_PRODUCT_ID = "iasfoeU8veF";
 const atcLevel4WithOralROA1 = "A07AA";
-const atcLevel4WithOralROA2 = "P01AB";
-const atcLevel4WithOralROA3 = "J01XD";
-const atcLevel4WithOralROA4 = "J01XA";
+const atcLevel4WithOralOrRectalROA2 = "P01AB";
+const atcLevel4WithParenteralROA3 = "J01XD";
+const atcLevel4WithParenteralROA4 = "J01XA";
 const atcCodeWithSaltHippAndMand = "J01XX05";
 const atcCodeWithRoaOAndSaltDefault = "J01FA01";
+const CODE_PRODUCT_NOT_HAVE_ATC = "Z99ZZ99";
+const COMB_CODE_PRODUCT_NOT_HAVE_ATC = "Z99ZZ99_99";
 
 export class CustomValidationsAMCProductData {
     constructor(
@@ -108,7 +110,7 @@ export class CustomValidationsAMCProductData {
         countryId: string,
         countryName: string,
         period: string,
-        atcVersion: GlassATCVersion
+        atcVersion: GlassAtcVersionData
     ): ConsistencyError[] {
         const errors = _(
             teis.map(tei => {
@@ -143,9 +145,13 @@ export class CustomValidationsAMCProductData {
                     });
                 }
                 if (atcCode) {
-                    const atcData = atcVersion.atc;
-                    const isValidATCCode = atcData.find(data => data.CODE === atcCode && data.LEVEL === "5");
-                    if (!isValidATCCode) {
+                    const atcData = atcVersion.atcs;
+                    const validATCCode =
+                        atcCode === CODE_PRODUCT_NOT_HAVE_ATC
+                            ? atcCode
+                            : atcData.find(data => data.CODE === atcCode && data.LEVEL === LAST_ATC_CODE_LEVEL)?.CODE;
+
+                    if (!validATCCode) {
                         curErrors.push({
                             error: i18n.t(
                                 `ATC code specified in the file is not a valid level 5 ATC code : ${atcCode}`
@@ -153,38 +159,50 @@ export class CustomValidationsAMCProductData {
                             line: tei.trackedEntity ? parseInt(tei.trackedEntity) + 6 : -1,
                         });
                     } else {
-                        const atcCodeLevelHeirarchy = isValidATCCode.PATH?.split("\\");
-                        const atcCodeLevel4 = atcCodeLevelHeirarchy?.at(atcCodeLevelHeirarchy.length - 1);
-                        if (
-                            (atcCodeLevel4 === atcLevel4WithOralROA1 ||
-                                atcCodeLevel4 === atcLevel4WithOralROA2 ||
-                                atcCodeLevel4 === atcLevel4WithOralROA3 ||
-                                atcCodeLevel4 === atcLevel4WithOralROA4) &&
-                            roa &&
-                            roa !== "O"
-                        ) {
+                        const atcCodeByLevel = getAtcCodeByLevel(atcData, atcCode);
+                        const atcCodeLevel4 = atcCodeByLevel?.level4;
+
+                        if (atcCodeLevel4 === atcLevel4WithOralROA1 && roa && roa !== "O") {
                             curErrors.push({
                                 error: i18n.t(
-                                    `If ATC code in ATC levels 4 A07AA and P01AB, Route of administration must be oral`
+                                    `If ATC code ${atcCode} is in ATC level ${atcCodeLevel4}, Route of administration must be oral`
+                                ),
+                                line: tei.trackedEntity ? parseInt(tei.trackedEntity) + 6 : -1,
+                            });
+                        }
+
+                        if (atcCodeLevel4 === atcLevel4WithOralOrRectalROA2 && roa && roa !== "O" && roa !== "R") {
+                            curErrors.push({
+                                error: i18n.t(
+                                    `If ATC code ${atcCode} is in ATC level ${atcCodeLevel4}, Route of administration must be oral or rectal`
                                 ),
                                 line: tei.trackedEntity ? parseInt(tei.trackedEntity) + 6 : -1,
                             });
                         }
 
                         if (
-                            isValidATCCode.CODE === atcCodeWithSaltHippAndMand &&
-                            salt &&
-                            salt !== "HIPP" &&
-                            salt !== "MAND"
+                            (atcCodeLevel4 === atcLevel4WithParenteralROA3 ||
+                                atcCodeLevel4 === atcLevel4WithParenteralROA4) &&
+                            roa &&
+                            roa !== "P"
                         ) {
                             curErrors.push({
                                 error: i18n.t(
-                                    `If ATC code is ${atcCodeWithSaltHippAndMand}, salt must be either HIPP or MAND`
+                                    `If ATC code ${atcCode} is in ATC level ${atcCodeLevel4}, Route of administration must be parenteral`
                                 ),
                                 line: tei.trackedEntity ? parseInt(tei.trackedEntity) + 6 : -1,
                             });
                         }
-                        if (isValidATCCode.CODE === atcCodeWithRoaOAndSaltDefault) {
+
+                        if (validATCCode === atcCodeWithSaltHippAndMand && salt && salt !== "HIPP" && salt !== "MAND") {
+                            curErrors.push({
+                                error: i18n.t(
+                                    `If ATC code ${atcCode} is ${atcCodeWithSaltHippAndMand}, salt must be either HIPP or MAND`
+                                ),
+                                line: tei.trackedEntity ? parseInt(tei.trackedEntity) + 6 : -1,
+                            });
+                        }
+                        if (validATCCode === atcCodeWithRoaOAndSaltDefault) {
                             if (roa && roa === "O" && !(salt === "XXXX" || salt === "ESUC")) {
                                 curErrors.push({
                                     error: i18n.t(
@@ -204,11 +222,11 @@ export class CustomValidationsAMCProductData {
                         }
                     }
                 }
-                const combinationData = atcVersion.ddd_combinations;
+                const combinationData = atcVersion.combinations;
                 const validCombinationCode = combinationData.find(data => data.COMB_CODE === combinationCode);
 
                 if (combinationCode) {
-                    if (!validCombinationCode) {
+                    if (!validCombinationCode && combinationCode !== COMB_CODE_PRODUCT_NOT_HAVE_ATC) {
                         curErrors.push({
                             error: i18n.t(
                                 `Combination code specified in the file is not a valid combination code : ${combinationCode}`
@@ -218,12 +236,12 @@ export class CustomValidationsAMCProductData {
                     }
                 }
 
-                if (roa && validCombinationCode) {
-                    if (roa !== validCombinationCode.ROUTE) {
+                if (roa && validCombinationCode && combinationCode !== COMB_CODE_PRODUCT_NOT_HAVE_ATC) {
+                    if (roa !== validCombinationCode.ROA) {
                         curErrors.push({
                             error: i18n.t(
                                 `Route of Administration specified in the file : ${roa} is not valid for given combination code : ${combinationCode}. 
-                                \n It should be ${validCombinationCode.ROUTE}`
+                                \n It should be ${validCombinationCode.ROA}`
                             ),
                             line: tei.trackedEntity ? parseInt(tei.trackedEntity) + 6 : -1,
                         });

@@ -94,17 +94,28 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         if (!_.isEmpty(d2TrackerEvents)) {
             return importApiTracker(this.api, { events: d2TrackerEvents }, importStrategy);
         } else {
-            logger.error(`Product level data: there are no events to be created`);
+            logger.error(`[${new Date().toISOString()}] Product level data: there are no events to be created`);
             return Future.error("There are no events to be created");
         }
     }
 
     getProductRegisterAndRawProductConsumptionByProductIds(
         orgUnitId: Id,
-        productIds: string[]
+        productIds: string[],
+        period: string,
+        productIdsChunkSize: number,
+        chunked?: boolean
     ): FutureData<ProductDataTrackedEntity[]> {
+        if (chunked) {
+            return this.getProductRegisterAndRawProductConsumptionByProductIdsChunked(
+                orgUnitId,
+                productIds,
+                period,
+                productIdsChunkSize
+            );
+        }
         return Future.fromPromise(
-            this.getProductRegisterAndRawProductConsumptionByProductIdsAsync(orgUnitId, productIds)
+            this.getProductRegisterAndRawProductConsumptionByProductIdsAsync(orgUnitId, productIds, period)
         ).map(trackedEntities => {
             return this.mapFromTrackedEntitiesToProductData(trackedEntities);
         });
@@ -132,9 +143,45 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         });
     }
 
+    private getProductRegisterAndRawProductConsumptionByProductIdsChunked(
+        orgUnit: Id,
+        productIds: string[],
+        period: string,
+        productIdsChunkSize: number
+    ): FutureData<ProductDataTrackedEntity[]> {
+        const chunkedProductIds = _(productIds).chunk(productIdsChunkSize).value();
+        const enrollmentEnrolledAfter = `${period}-1-1`;
+        const enrollmentEnrolledBefore = `${period}-12-31`;
+
+        return Future.sequential(
+            chunkedProductIds.flatMap(productIdsChunk => {
+                const productIdsString = productIdsChunk.join(";");
+                const filter = `${AMR_GLASS_AMC_TEA_PRODUCT_ID}:IN:${productIdsString}`;
+
+                // TODO: change pageSize to skipPaging:true when new version of d2-api
+                return apiToFuture(
+                    this.api.tracker.trackedEntities.get({
+                        fields: trackedEntitiesFields,
+                        program: AMC_PRODUCT_REGISTER_PROGRAM_ID,
+                        programStage: AMC_RAW_PRODUCT_CONSUMPTION_STAGE_ID,
+                        orgUnit: orgUnit,
+                        filter: filter,
+                        enrollmentEnrolledAfter: enrollmentEnrolledAfter,
+                        enrollmentEnrolledBefore: enrollmentEnrolledBefore,
+                        pageSize: productIdsChunk.length,
+                    })
+                ).flatMap((trackedEntitiesResponse: TrackedEntitiesGetResponse) => {
+                    const productData = this.mapFromTrackedEntitiesToProductData(trackedEntitiesResponse.instances);
+                    return Future.success(productData);
+                });
+            })
+        ).flatMap(listOfProductData => Future.success(_(listOfProductData).flatten().value()));
+    }
+
     private async getProductRegisterAndRawProductConsumptionByProductIdsAsync(
         orgUnit: Id,
-        productIds: string[]
+        productIds: string[],
+        period: string
     ): Promise<D2TrackerTrackedEntity[]> {
         const trackedEntities: D2TrackerTrackedEntity[] = [];
         const pageSize = 250;
@@ -143,9 +190,18 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         let result;
         const productIdsString = productIds.join(";");
         const filter = `${AMR_GLASS_AMC_TEA_PRODUCT_ID}:IN:${productIdsString}`;
+        const enrollmentEnrolledAfter = `${period}-1-1`;
+        const enrollmentEnrolledBefore = `${period}-12-31`;
 
         do {
-            result = await this.getTrackedEntitiesOfPage({ orgUnit, filter, page, pageSize });
+            result = await this.getTrackedEntitiesOfPage({
+                orgUnit,
+                filter,
+                page,
+                pageSize,
+                enrollmentEnrolledBefore,
+                enrollmentEnrolledAfter,
+            });
             trackedEntities.push(...result.instances);
             page++;
         } while (result.page < totalPages);
@@ -267,7 +323,8 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
                         trackedEntityId: trackedEntity.trackedEntity,
                         enrollmentId: trackedEntity.enrollments[0].enrollment,
                         enrollmentStatus: trackedEntity.enrollments[0].status,
-                        events,
+                        enrolledAt: trackedEntity.enrollments[0].enrolledAt,
+                        events: events,
                         attributes: trackedEntity.attributes.map(({ attribute, valueType, value }) => ({
                             id: attribute,
                             valueType: valueType as string,
@@ -289,15 +346,25 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         return rawSubstanceConsumptionCalculatedData
             .map(data => {
                 const productId = data.AMR_GLASS_AMC_TEA_PRODUCT_ID;
-                const productDataTrackedEntity = productDataTrackedEntities.find(productDataTrackedEntity =>
-                    productDataTrackedEntity.attributes.some(attribute => attribute.value === productId)
-                );
+                const productDataTrackedEntity = productDataTrackedEntities.find(productDataTrackedEntity => {
+                    const enrolledYear = new Date(productDataTrackedEntity.enrolledAt).getFullYear();
+                    return (
+                        productDataTrackedEntity.attributes.some(attribute => attribute.value === productId) &&
+                        enrolledYear === Number(period)
+                    );
+                });
+
                 if (productDataTrackedEntity) {
                     const dataValues: DataValue[] = rawSubstanceConsumptionCalculatedStageMetadata.dataElements.map(
                         ({ id, code, valueType, optionSetValue, optionSet }) => {
                             const value = data[code.trim() as RawSubstanceConsumptionCalculatedKeys];
                             const dataValue = optionSetValue
-                                ? optionSet.options.find(option => option.name === value)?.code || ""
+                                ? optionSet.options.find(
+                                      option =>
+                                          option.code === value ||
+                                          option.code === value?.toString() ||
+                                          option.name === value
+                                  )?.code || ""
                                 : (valueType === "NUMBER" ||
                                       valueType === "INTEGER" ||
                                       valueType === "INTEGER_POSITIVE" ||
