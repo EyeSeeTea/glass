@@ -175,7 +175,7 @@ describe("Given calculate Consumption Product Level Data function", () => {
 });
 
 function givenProductRegistryAttributesByType(type?: string): ProductRegistryAttributes[] {
-    const productRegistryAttributesTypes = {
+    const productRegistryAttributesTypes: Record<string, ProductRegistryAttributes[]> = {
         basic: productRegistryAttributesBasic,
         no_atc_data: productRegistryAttributesBasic,
         conc_volume_and_volume: productRegistryAttributesConcVolumeAndVolume,
@@ -184,7 +184,7 @@ function givenProductRegistryAttributesByType(type?: string): ProductRegistryAtt
             productRegistryAttributesMillionInternationalUnitDifferentDDDUnit,
         no_combination_code_no_found_ddd: productRegistryAttributesNoCombCodeNoFoundDDD,
         wrong_strength_unit: productRegistryAttributesWrongStrengthUnit,
-    } as Record<string, ProductRegistryAttributes[]>;
+    };
 
     const productRegistryAttributes = type
         ? productRegistryAttributesTypes[type]
@@ -230,7 +230,7 @@ function verifyCalculationResult(result: RawSubstanceConsumptionCalculated[], ty
         expect(calculation.salt_autocalculated).toBe(expectedCalculation?.salt_autocalculated);
         expect(calculation.year).toBe(expectedCalculation?.year);
         expect(calculation.packages_autocalculated).toBe(expectedCalculation?.packages_autocalculated);
-        expect(calculation.tons_autocalculated).toBe(expectedCalculation?.tons_autocalculated);
+        expect(calculation.kilograms_autocalculated).toBe(expectedCalculation?.kilograms_autocalculated);
         expect(calculation.ddds_autocalculated).toBe(expectedCalculation?.ddds_autocalculated);
         expect(calculation.data_status_autocalculated).toBe(expectedCalculation?.data_status_autocalculated);
         expect(calculation.health_sector_autocalculated).toBe(expectedCalculation?.health_sector_autocalculated);
