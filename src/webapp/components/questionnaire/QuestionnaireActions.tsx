@@ -12,10 +12,16 @@ interface QuestionnaireHeaderProps {
     isSaving: boolean;
     setAsCompleted: (isCompleted: boolean) => void;
     mode: QuestionnarieFormProps["mode"];
+    saveQuestionnaireActions: {
+        saveQuestionnaire: () => void;
+        disableSave: boolean;
+        isSavingQuestionnaire: boolean;
+    };
 }
 
 export const QuestionnaireActions: React.FC<QuestionnaireHeaderProps> = props => {
-    const { description, isCompleted, isSaving, mode, setAsCompleted } = props;
+    const { isCompleted, isSaving, mode, saveQuestionnaireActions, setAsCompleted } = props;
+    const { saveQuestionnaire, disableSave, isSavingQuestionnaire } = saveQuestionnaireActions;
     const hasCurrentUserCaptureAccess = useGlassCaptureAccess();
 
     return (
@@ -33,6 +39,16 @@ export const QuestionnaireActions: React.FC<QuestionnaireHeaderProps> = props =>
 
             {mode === "edit" && (
                 <div className="buttons">
+                    {isSavingQuestionnaire && <CircularProgress size={22} />}
+                    <StyledButton
+                        variant="contained"
+                        color="primary"
+                        onClick={saveQuestionnaire}
+                        disabled={disableSave}
+                    >
+                        {i18n.t("Save Questionnaire")}
+                    </StyledButton>
+
                     {isSaving && <CircularProgress size={22} />}
                     {isCompleted ? (
                         <Button onClick={() => setAsCompleted(false)} variant="contained" color="secondary">
@@ -45,10 +61,6 @@ export const QuestionnaireActions: React.FC<QuestionnaireHeaderProps> = props =>
                     )}
                 </div>
             )}
-
-            <div className="head">
-                <span className="desc">{description}</span>
-            </div>
         </QuestionnaireHeaderStyled>
     );
 };
@@ -62,6 +74,7 @@ const QuestionnaireHeaderStyled = styled.div`
 
     .desc {
         margin-left: 14px;
+        white-space: pre-wrap;
     }
 
     .comp {
@@ -81,4 +94,8 @@ const QuestionnaireHeaderStyled = styled.div`
         text-align: right;
         margin-bottom: 15px;
     }
+`;
+
+const StyledButton = styled(Button)`
+    margin: 8px;
 `;

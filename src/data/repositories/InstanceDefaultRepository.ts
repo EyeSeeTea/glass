@@ -13,12 +13,7 @@ import { apiToFuture } from "../../utils/futures";
 import { DataStoreClient } from "../data-store/DataStoreClient";
 import { DataStoreKeys } from "../data-store/DataStoreKeys";
 import { Instance } from "../entities/Instance";
-
-type GeneralInfoType = {
-    countryLevel: number;
-    enrolmentProgram: string;
-    regionLevel: number;
-};
+import { GlassGeneralInfo } from "../../domain/entities/GlassGeneralInfo";
 
 const KOSOVO = "NEPywTBN52g";
 const allowedNaOrgUnits = [KOSOVO];
@@ -85,6 +80,7 @@ export class InstanceDefaultRepository implements InstanceRepository {
                     moduleId: module.id,
                     moduleName: module.name,
                     populateCurrentYearInHistory: module.populateCurrentYearInHistory ? true : false,
+                    startPeriod: module.startPeriod,
                     readAccess: readAccess,
                     captureAccess: writeAccess,
                     usergroups: [...module.userGroups.captureAccess, ...module.userGroups.readAccess],
@@ -172,7 +168,7 @@ export class InstanceDefaultRepository implements InstanceRepository {
             }[] = [];
 
             return this.dataStoreClient.getObject(DataStoreKeys.GENERAL).flatMap(generalInfo => {
-                const countryLevel = (generalInfo as GeneralInfoType).countryLevel;
+                const countryLevel = (generalInfo as GlassGeneralInfo).countryLevel;
 
                 organisationUnits.forEach(orgUnit => {
                     if (

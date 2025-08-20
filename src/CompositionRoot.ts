@@ -91,6 +91,51 @@ import { GetMultipleDashboardUseCase } from "./domain/usecases/GetMultipleDashbo
 import { DownloadAllDataButtonData } from "./domain/usecases/DownloadAllDataButtonData";
 import { DownloadEmptyTemplateUseCase } from "./domain/usecases/DownloadEmptyTemplateUseCase";
 import { DownloadPopulatedTemplateUseCase } from "./domain/usecases/DownloadPopulatedTemplateUseCase";
+import { CountryDefaultRepository } from "./data/repositories/CountryDefaultRepository";
+import { GetAllCountriesUseCase } from "./domain/usecases/GetAllCountriesUseCase";
+import { SetToAsyncDeletionsUseCase } from "./domain/usecases/SetToAsyncDeletionsUseCase";
+import { GetAsyncDeletionsUseCase } from "./domain/usecases/GetAsyncDeletionsUseCase";
+import { DeletePrimaryFileDataUseCase } from "./domain/usecases/data-entry/DeletePrimaryFileDataUseCase";
+import { DeleteSecondaryFileDataUseCase } from "./domain/usecases/data-entry/DeleteSecondaryFileDataUseCase";
+import { DownloadDocumentAsArrayBufferUseCase } from "./domain/usecases/DownloadDocumentAsArrayBufferUseCase";
+import { GetGlassUploadByIdUseCase } from "./domain/usecases/GetGlassUploadByIdUseCase";
+import { GlassAsyncDeletionsDefaultRepository } from "./data/repositories/GlassAsyncDeletionsDefaultRepository";
+import { EncryptionDefaultRepository } from "./data/repositories/EncryptionDefaultRepository";
+import { GetAsyncUploadsUseCase } from "./domain/usecases/GetAsyncUploadsUseCase";
+import { GlassAsyncUploadsDefaultRepository } from "./data/repositories/GlassAsyncUploadsDefaultRepository";
+import { SetAsyncUploadsUseCase } from "./domain/usecases/SetAsyncUploadsUseCase";
+import { RemoveAsyncUploadByIdUseCase } from "./domain/usecases/RemoveAsyncUploadByIdUseCase";
+import { RemoveAsyncUploadsUseCase } from "./domain/usecases/RemoveAsyncUploadsUseCase";
+import { AMCQuestionnaireD2Repository } from "./data/repositories/amc-questionnaires/AMCQuestionnaireD2Repository";
+import { YesNoOptionsD2Repository } from "./data/repositories/amc-questionnaires/YesNoOptionsD2Repository";
+import { GetYesNoOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetYesNoOptionsUseCase";
+import { YesNoUnknownOptionsD2Repository } from "./data/repositories/amc-questionnaires/YesNoUnknownOptionsD2Repository";
+import { YesNoUnknownNAOptionsD2Repository } from "./data/repositories/amc-questionnaires/YesNoUnknownNAOptionsD2Repository";
+import { GetYesNoUnknownOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetYesNoUnknownOptionsUseCase";
+import { GetYesNoUnknownNAOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetYesNoUnknownNAOptionsUseCase";
+import { AntimicrobialClassOptionsD2Repository } from "./data/repositories/amc-questionnaires/AntimicrobialClassOptionsD2Repository";
+import { GetAntimicrobialClassOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetAntimicrobialClassOptionsUseCase";
+import { QuestionsAMCQuestionnaireD2Repository } from "./data/repositories/amc-questionnaires/QuestionsAMCQuestionnaireD2Repository";
+import { GetQuestionsAMCQuestionnaireUseCase } from "./domain/usecases/amc-questionnaires/GetQuestionsAMCQuestionnaireUseCase";
+import { SaveGeneralAMCQuestionnaireUseCase } from "./domain/usecases/amc-questionnaires/SaveGeneralAMCQuestionnaireUseCase";
+import { GetAMCQuestionnaireByOrgUnitAndPeriodUseCase } from "./domain/usecases/amc-questionnaires/GetAMCQuestionnaireByOrgUnitAndPeriodUseCase";
+import { GetAMCQuestionnaireByIdUseCase } from "./domain/usecases/amc-questionnaires/GetAMCQuestionnaireByIdUseCase";
+import { SaveAMClassAMCQuestionnaireUseCase } from "./domain/usecases/amc-questionnaires/SaveAMClassAMCQuestionnaireUseCase";
+import { Proportion50to100UnknownOptionsD2Repository } from "./data/repositories/amc-questionnaires/Proportion50to100UnknownOptionsD2Repository";
+import { DataLevelOptionsD2Repository } from "./data/repositories/amc-questionnaires/DataLevelOptionsD2Repository";
+import { DataSourceOptionsD2Repository } from "./data/repositories/amc-questionnaires/DataSourceOptionsD2Repository";
+import { NationalPopulationDataSourceOptionsD2Repository } from "./data/repositories/amc-questionnaires/NationalPopulationDataSourceOptionsD2Repository";
+import { ProcurementLevelOptionsD2Repository } from "./data/repositories/amc-questionnaires/ProcurementLevelOptionsD2Repository";
+import { StrataOptionsD2Repository } from "./data/repositories/amc-questionnaires/StrataOptionsD2Repository";
+import { GetProportion50to100UnknownOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetProportion50to100UnknownOptionsUseCase";
+import { GetDataLevelOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetDataLevelOptionsUseCase";
+import { GetDataSourceOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetDataSourceOptionsUseCase";
+import { GetNationalPopulationDataSourceOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetNationalPopulationDataSourceOptionsUseCase";
+import { GetProcurementLevelOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetProcurementLevelOptionsUseCase";
+import { GetStrataOptionsUseCase } from "./domain/usecases/amc-questionnaires/GetStrataOptionsUseCase";
+import { SaveComponentAMCQuestionnaireUseCase } from "./domain/usecases/amc-questionnaires/SaveComponentAMCQuestionnaireUseCase";
+import { UNPopulationD2Repository } from "./data/repositories/amc-questionnaires/UNPopulationD2Repository";
+import { GetUNPopulationUseCase } from "./domain/usecases/amc-questionnaires/GetUNPopulationUseCase";
 
 export function getCompositionRoot(instance: Instance) {
     const api = getD2APiFromInstance(instance);
@@ -127,6 +172,23 @@ export function getCompositionRoot(instance: Instance) {
     const glassAtcRepository = new GlassATCDefaultRepository(dataStoreClient);
     const atcRepository = new GlassATCDefaultRepository(dataStoreClient);
     const eventVisualizationRepository = new EventVisualizationAnalyticsDefaultRepository(api);
+    const countryRepository = new CountryDefaultRepository(api);
+    const glassAsyncDeletionsRepository = new GlassAsyncDeletionsDefaultRepository(dataStoreClient);
+    const encryptionRepository = new EncryptionDefaultRepository(api);
+    const glassAsyncUploadsRepository = new GlassAsyncUploadsDefaultRepository(dataStoreClient);
+    const amcQuestionnaireRepository = new AMCQuestionnaireD2Repository(api);
+    const questionsAMCQuestionnaireRepository = new QuestionsAMCQuestionnaireD2Repository(api);
+    const yesNoOptionsRepository = new YesNoOptionsD2Repository(api);
+    const yesNoUnknownOptionsRepository = new YesNoUnknownOptionsD2Repository(api);
+    const yesNoUnknownNAOptionsRepository = new YesNoUnknownNAOptionsD2Repository(api);
+    const antimicrobialClassOptionsRepository = new AntimicrobialClassOptionsD2Repository(api);
+    const dataLevelOptionsD2Repository = new DataLevelOptionsD2Repository(api);
+    const dataSourceOptionsD2Repository = new DataSourceOptionsD2Repository(api);
+    const nationalPopulationDataSourceOptionsD2Repository = new NationalPopulationDataSourceOptionsD2Repository(api);
+    const procurementLevelOptionsD2Repository = new ProcurementLevelOptionsD2Repository(api);
+    const proportion50to100UnknownOptionsD2Repository = new Proportion50to100UnknownOptionsD2Repository(api);
+    const strataOptionsRepository = new StrataOptionsD2Repository(api);
+    const unPopulationRepository = new UNPopulationD2Repository(api);
 
     return {
         instance: getExecute({
@@ -153,6 +215,7 @@ export function getCompositionRoot(instance: Instance) {
         }),
         glassUploads: getExecute({
             getAll: new GetGlassUploadsUseCase(glassUploadsRepository),
+            getById: new GetGlassUploadByIdUseCase(glassUploadsRepository),
             setStatus: new SetUploadStatusUseCase(glassUploadsRepository),
             getAMRUploadsForCurrentDataSubmission: new GetGlassUploadsByDataSubmissionUseCase(
                 glassUploadsRepository,
@@ -163,12 +226,29 @@ export function getCompositionRoot(instance: Instance) {
             setBatchId: new SetUploadBatchIdUseCase(glassUploadsRepository),
             saveImportSummaryErrorsOfFiles: new SaveImportSummaryErrorsOfFilesInUploadsUseCase(glassUploadsRepository),
             getCurrentDataSubmissionFileType: new GetUploadsByDataSubmissionUseCase(glassUploadsRepository),
+            setToAsyncDeletions: new SetToAsyncDeletionsUseCase({
+                glassAsyncDeletionsRepository,
+                glassAsyncUploadsRepository,
+                glassUploadsRepository,
+            }),
+            getAsyncDeletions: new GetAsyncDeletionsUseCase(glassAsyncDeletionsRepository),
+            getAsyncUploads: new GetAsyncUploadsUseCase(glassAsyncUploadsRepository),
+            setToAsyncUploads: new SetAsyncUploadsUseCase({ glassAsyncUploadsRepository, glassUploadsRepository }),
+            removeAsyncUploadById: new RemoveAsyncUploadByIdUseCase({
+                glassAsyncUploadsRepository,
+                glassUploadsRepository,
+            }),
+            removeAsyncUploads: new RemoveAsyncUploadsUseCase({
+                glassAsyncUploadsRepository,
+                glassUploadsRepository,
+            }),
         }),
         glassDocuments: getExecute({
             getAll: new GetGlassDocumentsUseCase(glassDocumentsRepository),
             upload: new UploadDocumentUseCase(glassDocumentsRepository, glassUploadsRepository),
             deleteByUploadId: new DeleteDocumentInfoByUploadIdUseCase(glassDocumentsRepository, glassUploadsRepository),
             download: new DownloadDocumentUseCase(glassDocumentsRepository),
+            downloadAsArrayBuffer: new DownloadDocumentAsArrayBufferUseCase(glassDocumentsRepository),
             updateSecondaryFileWithPrimaryId: new UpdateSampleUploadWithRisIdUseCase(glassUploadsRepository),
         }),
         fileSubmission: getExecute({
@@ -177,7 +257,6 @@ export function getCompositionRoot(instance: Instance) {
                 risIndividualFungalRepository,
                 metadataRepository,
                 dataValuesRepository,
-                glassModuleRepository,
                 dhis2EventsDefaultRepository,
                 excelRepository,
                 glassDocumentsRepository,
@@ -188,7 +267,9 @@ export function getCompositionRoot(instance: Instance) {
                 programRulesMetadataDefaultRepository,
                 atcRepository,
                 amcProductDataRepository,
-                amcSubstanceDataRepository
+                amcSubstanceDataRepository,
+                glassAtcRepository,
+                encryptionRepository
             ),
             validatePrimaryFile: new ValidatePrimaryFileUseCase(
                 risDataRepository,
@@ -206,7 +287,8 @@ export function getCompositionRoot(instance: Instance) {
                 glassDocumentsRepository,
                 glassUploadsRepository,
                 dhis2EventsDefaultRepository,
-                programRulesMetadataDefaultRepository
+                programRulesMetadataDefaultRepository,
+                glassAtcRepository
             ),
             validateSecondaryFile: new ValidateSampleFileUseCase(
                 sampleDataRepository,
@@ -226,6 +308,29 @@ export function getCompositionRoot(instance: Instance) {
                 egaspProgramRepository,
                 metadataRepository
             ),
+            deletePrimaryFile: new DeletePrimaryFileDataUseCase({
+                risDataRepository,
+                metadataRepository,
+                dataValuesRepository,
+                dhis2EventsDefaultRepository,
+                excelRepository,
+                glassDocumentsRepository,
+                instanceRepository,
+                glassUploadsRepository,
+                trackerRepository,
+                amcSubstanceDataRepository,
+            }),
+            deleteSecondaryFile: new DeleteSecondaryFileDataUseCase({
+                sampleDataRepository,
+                dataValuesRepository,
+                dhis2EventsDefaultRepository,
+                excelRepository,
+                glassDocumentsRepository,
+                metadataRepository,
+                instanceRepository,
+                glassUploadsRepository,
+                trackerRepository,
+            }),
         }),
         questionnaires: getExecute({
             get: new GetQuestionnaireUseCase(questionnaireD2Repository),
@@ -241,6 +346,7 @@ export function getCompositionRoot(instance: Instance) {
         }),
         countries: getExecute({
             getInformation: new GetCountryInformationUseCase(countryInformationRepository),
+            getAll: new GetAllCountriesUseCase(countryRepository),
         }),
         glassDashboard: getExecute({
             getDashboard: new GetDashboardUseCase(glassModuleRepository),
@@ -299,6 +405,30 @@ export function getCompositionRoot(instance: Instance) {
                 glassModuleRepository
             ),
             downloadAllData: new DownloadAllDataForModuleUseCase(eventVisualizationRepository),
+        }),
+
+        amcQuestionnaires: getExecute({
+            getById: new GetAMCQuestionnaireByIdUseCase(amcQuestionnaireRepository),
+            getByOrgUnitAndPeriod: new GetAMCQuestionnaireByOrgUnitAndPeriodUseCase(amcQuestionnaireRepository),
+            saveGeneral: new SaveGeneralAMCQuestionnaireUseCase(amcQuestionnaireRepository),
+            saveAmClass: new SaveAMClassAMCQuestionnaireUseCase(amcQuestionnaireRepository),
+            saveComponent: new SaveComponentAMCQuestionnaireUseCase(amcQuestionnaireRepository),
+            getQuestions: new GetQuestionsAMCQuestionnaireUseCase(questionsAMCQuestionnaireRepository),
+            getYesNoOptions: new GetYesNoOptionsUseCase(yesNoOptionsRepository),
+            getYesNoUnknownOptions: new GetYesNoUnknownOptionsUseCase(yesNoUnknownOptionsRepository),
+            getYesNoUnknownNAOptions: new GetYesNoUnknownNAOptionsUseCase(yesNoUnknownNAOptionsRepository),
+            getAntimicrobialClassOptions: new GetAntimicrobialClassOptionsUseCase(antimicrobialClassOptionsRepository),
+            getProportion50to100UnknownOptions: new GetProportion50to100UnknownOptionsUseCase(
+                proportion50to100UnknownOptionsD2Repository
+            ),
+            getDataLevelOptions: new GetDataLevelOptionsUseCase(dataLevelOptionsD2Repository),
+            getDataSourceOptions: new GetDataSourceOptionsUseCase(dataSourceOptionsD2Repository),
+            getNationalPopulationDataSourceOptions: new GetNationalPopulationDataSourceOptionsUseCase(
+                nationalPopulationDataSourceOptionsD2Repository
+            ),
+            getProcurementLevelOptions: new GetProcurementLevelOptionsUseCase(procurementLevelOptionsD2Repository),
+            getStrataOptions: new GetStrataOptionsUseCase(strataOptionsRepository),
+            getUNPopulation: new GetUNPopulationUseCase(unPopulationRepository),
         }),
     };
 }

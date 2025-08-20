@@ -1,4 +1,3 @@
-import { D2ValidationResponse } from "../../../../data/repositories/MetadataDefaultRepository";
 import { Future, FutureData } from "../../../entities/Future";
 import { ImportStrategy } from "../../../entities/data-entry/DataValuesSaveSummary";
 import { ConsistencyError, ImportSummary } from "../../../entities/data-entry/ImportSummary";
@@ -10,7 +9,6 @@ import { checkASTResults } from "../utils/checkASTResults";
 import { checkBatchId } from "../utils/checkBatchId";
 import { checkCountry } from "../utils/checkCountry";
 import { checkDhis2Validations } from "../utils/checkDhis2Validations";
-import { checkPathogenAntibiotic } from "../utils/checkPathogenAntibiotic";
 import { checkSpecimenPathogen } from "../utils/checkSpecimenPathogen";
 import { checkYear } from "../utils/checkYear";
 import {
@@ -23,8 +21,8 @@ import { mapDataValuesToImportSummary } from "../utils/mapDhis2Summary";
 import { RISData } from "../../../entities/data-entry/amr-external/RISData";
 import { checkDuplicateRowsRIS } from "../utils/checkDuplicateRows";
 
-const AMR_AMR_DS_INPUT_FILES_RIS_DS_ID = "CeQPmXgrhHF";
-const AMR_DATA_PATHOGEN_ANTIBIOTIC_BATCHID_CC_ID = "S427AvQESbw";
+export const AMR_AMR_DS_INPUT_FILES_RIS_DS_ID = "CeQPmXgrhHF";
+export const AMR_DATA_PATHOGEN_ANTIBIOTIC_BATCHID_CC_ID = "S427AvQESbw";
 
 export class ImportRISFile {
     constructor(
@@ -34,6 +32,7 @@ export class ImportRISFile {
         private moduleRepository: GlassModuleRepository
     ) {}
 
+    // NOTICE: check also DeleteRISDatasetUseCase.ts that contains same code adapted for node environment (only DELETE)
     public importRISFile(
         inputFile: File,
         batchId: string,
@@ -62,14 +61,9 @@ export class ImportRISFile {
                 });
             })
             .flatMap(({ risDataItems, dataSet, dataSet_CC, dataElement_CC, orgUnits, module }) => {
-                const pathogenAntibioticErrors = module.consistencyChecks
-                    ? checkPathogenAntibiotic(risDataItems, module.consistencyChecks.pathogenAntibiotic)
-                    : [];
-
-                const specimenPathogenErrors = module.consistencyChecks
+                const specimenPathogenAntibioticErrors = module.consistencyChecks
                     ? checkSpecimenPathogen(risDataItems, module.consistencyChecks.specimenPathogen)
                     : [];
-
                 const astResultsErrors = checkASTResults(risDataItems);
                 const batchIdErrors = checkBatchId(risDataItems, batchId);
                 const yearErrors = checkYear(risDataItems, year);
@@ -125,8 +119,7 @@ export class ImportRISFile {
                         ? []
                         : [
                               ...blockingCategoryOptionConsistencyErrors,
-                              ...pathogenAntibioticErrors,
-                              ...specimenPathogenErrors,
+                              ...specimenPathogenAntibioticErrors,
                               ...astResultsErrors,
                               ...batchIdErrors,
                               ...yearErrors,
@@ -142,6 +135,7 @@ export class ImportRISFile {
                             updated: 0,
                             ignored: 0,
                             deleted: 0,
+                            total: 0,
                         },
                         nonBlockingErrors: [],
                         blockingErrors: allBlockingErrors,
@@ -150,26 +144,24 @@ export class ImportRISFile {
                     return Future.success(errorImportSummary);
                 }
 
-                /* eslint-disable no-console */
-
-                console.log({ risInitialFileDataValues: dataValues });
-                console.log({ risFinalFileDataValues: dataValues });
-
                 const uniqueAOCs = _.uniq(dataValues.map(el => el.attributeOptionCombo || ""));
 
                 return this.dataValuesRepository.save(dataValues, action, dryRun).flatMap(saveSummary => {
                     //Run validations only on actual import
                     if (!dryRun) {
                         return this.metadataRepository
-                            .validateDataSet(AMR_AMR_DS_INPUT_FILES_RIS_DS_ID, year.toString(), orgUnit, uniqueAOCs)
+                            .getValidationsDataSet(
+                                AMR_AMR_DS_INPUT_FILES_RIS_DS_ID,
+                                year.toString(),
+                                orgUnit,
+                                uniqueAOCs
+                            )
                             .flatMap(validationResponse => {
-                                const validations = validationResponse as D2ValidationResponse[];
+                                const validations = validationResponse;
 
                                 const validationRulesIds: string[] = validations.flatMap(
                                     ({ validationRuleViolations }) =>
-                                        validationRuleViolations.map(
-                                            ruleViolation => (ruleViolation as any)?.validationRule?.id
-                                        )
+                                        validationRuleViolations.map(ruleViolation => ruleViolation?.validationRule?.id)
                                 );
 
                                 return this.metadataRepository

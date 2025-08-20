@@ -1,5 +1,4 @@
 import { EventStatus } from "@eyeseetea/d2-api";
-import { D2TrackerEvent, DataValue } from "@eyeseetea/d2-api/api/trackerEvents";
 import { Dhis2EventsDefaultRepository } from "../../../../data/repositories/Dhis2EventsDefaultRepository";
 import { SignalDefaultRepository } from "../../../../data/repositories/SignalDefaultRepository";
 import { UsersDefaultRepository } from "../../../../data/repositories/UsersDefaultRepository";
@@ -8,8 +7,11 @@ import { Questionnaire } from "../../../entities/Questionnaire";
 import { generateId } from "../../../entities/Ref";
 import { Signal, SignalStatusTypes } from "../../../entities/Signal";
 import { NotificationRepository } from "../../../repositories/NotificationRepository";
+import { TrackerEvent, TrackerEventDataValue } from "../../../entities/TrackedEntityInstance";
+import { formatDate } from "../../../../utils/dates";
 
 export const EAR_PROGRAM_ID = "SQe26z0smFP";
+export const EAR_PROGRAM_STAGE_ID = "Oic1c7maX1g";
 const EAR_CONFIDENTIAL_DATAELEMENT = "KycX5z7NLqU";
 export type SignalAction = "Save" | "Publish";
 
@@ -32,7 +34,7 @@ export class ImportSignalsUseCase {
         confidentialUserGroups: string[]
     ): FutureData<void> {
         //1.Create Event
-        const events: D2TrackerEvent[] = [];
+        const events: TrackerEvent[] = [];
         return this.mapQuestionnaireToEvent(signalEventId, questionnaire, orgUnit.id, orgUnit.name, action).flatMap(
             ({ event, confidential, message }) => {
                 events.push(event);
@@ -40,6 +42,16 @@ export class ImportSignalsUseCase {
                 return this.dhis2EventsDefaultRepository
                     .import({ events: events }, "CREATE_AND_UPDATE")
                     .flatMap(importSummary => {
+                        if (importSummary.status === "ERROR") {
+                            return Future.error(
+                                `EAR-IMPORT-ERROR: ${importSummary.validationReport?.errorReports
+                                    ?.map(e => e.message)
+                                    .join(", ")}`
+                            );
+                        }
+                        if (!importSummary.bundleReport) {
+                            return Future.error("EAR-IMPORT-ERROR: No bundle report found in import summary");
+                        }
                         // const eventId = importSummary.importSummaries?.at(0)?.reference;
                         const eventId = importSummary.bundleReport.typeReportMap.EVENT.objectReports[0]?.uid;
                         if (importSummary.status === "OK" && eventId) {
@@ -119,11 +131,11 @@ export class ImportSignalsUseCase {
         orgUnitId: string,
         orgUnitName: string,
         signalAction: SignalAction
-    ): FutureData<{ event: D2TrackerEvent; confidential: boolean; message: string }> {
+    ): FutureData<{ event: TrackerEvent; confidential: boolean; message: string }> {
         const questions = questionnaire.sections.flatMap(section => section.questions);
         let confidential = false; //Non confidential by default
         let message = "";
-        const dataValues = _.compact(
+        const dataValues: TrackerEventDataValue[] = _.compact(
             questions.map(q => {
                 if (q) {
                     if (q.type === "select" && q.value) {
@@ -135,6 +147,11 @@ export class ImportSignalsUseCase {
                             dataElement: q.id,
                             value: q.value.code,
                         };
+                    } else if (q.type === "date" && q.value) {
+                        return {
+                            dataElement: q.id,
+                            value: formatDate(q.value),
+                        };
                     } else {
                         message = message + `${q.text} : ${q.value} \n\n`;
                         return {
@@ -144,26 +161,27 @@ export class ImportSignalsUseCase {
                     }
                 }
             })
-        );
+        ).map(dv => ({ ...dv, value: dv.value?.toString() || "" }));
         const eventStatus: EventStatus = signalAction === "Save" ? "ACTIVE" : "COMPLETED";
 
         if (eventId) {
             return this.dhis2EventsDefaultRepository.getEventById(eventId).flatMap(event => {
-                const updatedEvent: D2TrackerEvent = {
+                const updatedEvent: TrackerEvent = {
                     ...event,
                     status: eventStatus,
-                    dataValues: dataValues as DataValue[],
+                    dataValues: dataValues,
                 };
                 return Future.success({ event: updatedEvent, confidential, message });
             });
         } else {
-            const event: D2TrackerEvent = {
+            const event: TrackerEvent = {
                 event: "",
                 orgUnit: orgUnitId,
                 orgUnitName,
                 program: EAR_PROGRAM_ID,
+                programStage: EAR_PROGRAM_STAGE_ID,
                 status: eventStatus,
-                occurredAt: new Date().toISOString().split("T")?.at(0) || "",
+                occurredAt: formatDate(new Date()),
                 //@ts-ignore
                 dataValues: dataValues,
             };

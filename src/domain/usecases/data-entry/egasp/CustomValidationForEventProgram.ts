@@ -1,16 +1,16 @@
-import i18n from "@eyeseetea/d2-ui-components/locales";
 import { Dhis2EventsDefaultRepository } from "../../../../data/repositories/Dhis2EventsDefaultRepository";
 import { Future, FutureData } from "../../../entities/Future";
 import { ConsistencyError } from "../../../entities/data-entry/ImportSummary";
 import { ValidationResult } from "../../../entities/program-rules/EventEffectTypes";
-import { D2TrackerEvent as Event } from "@eyeseetea/d2-api/api/trackerEvents";
 import { MetadataRepository } from "../../../repositories/MetadataRepository";
 import { AMC_RAW_SUBSTANCE_CONSUMPTION_PROGRAM_ID } from "../amc/ImportAMCSubstanceLevelData";
 import { EGASP_PROGRAM_ID } from "../../../../data/repositories/program-rule/ProgramRulesMetadataDefaultRepository";
 import { validateAtcVersion } from "../../../entities/GlassAtcVersionData";
+import i18n from "../../../../locales";
+import { TrackerEvent } from "../../../entities/TrackedEntityInstance";
 
 const EGASP_DATAELEMENT_ID = "KaS2YBRN8eH";
-const PATIENT_DATAELEMENT_ID = "aocFHBxcQa0";
+export const PATIENT_DATAELEMENT_ID = "aocFHBxcQa0";
 const ATC_VERSION_DATAELEMENT_ID = "aCuWz3HZ5Ti";
 export class CustomValidationForEventProgram {
     constructor(
@@ -18,7 +18,7 @@ export class CustomValidationForEventProgram {
         private metadataRepository: MetadataRepository
     ) {}
     public getValidatedEvents(
-        events: Event[],
+        events: TrackerEvent[],
         orgUnitId: string,
         orgUnitName: string,
         period: string,
@@ -29,7 +29,6 @@ export class CustomValidationForEventProgram {
         return this.checkCountry(events, orgUnitId, orgUnitName, checkClinics).flatMap(orgUnitErrors => {
             //2. Period validation
             const periodErrors = this.checkPeriod(events, period);
-
             if (programId === AMC_RAW_SUBSTANCE_CONSUMPTION_PROGRAM_ID) {
                 const initialErrors: ConsistencyError = { error: "", count: 0, lines: [] };
                 const atcVersionKeyError: ConsistencyError = events.reduce((acc, event) => {
@@ -40,7 +39,7 @@ export class CustomValidationForEventProgram {
                         ? acc
                         : {
                               ...acc,
-                              error: "ATC version manual has not the correct format (example: ATC-2024-v1)",
+                              error: "There is not an ATC version data for the corresponding year in ATC version manual",
                               count: acc?.count + 1,
                               lines: [...(acc?.lines || []), parseInt(event.event)],
                           };
@@ -48,7 +47,10 @@ export class CustomValidationForEventProgram {
 
                 const results: ValidationResult = {
                     events: events,
-                    blockingErrors: [...orgUnitErrors, ...periodErrors, atcVersionKeyError],
+                    blockingErrors:
+                        !atcVersionKeyError.count && !atcVersionKeyError.error && !atcVersionKeyError.lines?.length
+                            ? [...orgUnitErrors, ...periodErrors]
+                            : [...orgUnitErrors, ...periodErrors, atcVersionKeyError],
                     nonBlockingErrors: [],
                 };
 
@@ -88,12 +90,14 @@ export class CustomValidationForEventProgram {
     }
 
     private checkCountry(
-        events: Event[],
+        events: TrackerEvent[],
         countryId: string,
         countryName: string,
         checkClinics: boolean
     ): FutureData<ConsistencyError[]> {
-        const clinicsInEvents = events.map(e => e.orgUnit);
+        const clinicsInEvents = _(events.map(e => e.orgUnit))
+            .uniq()
+            .value();
         return Future.joinObj({
             clinicsInCountry: checkClinics
                 ? this.metadataRepository.getClinicsAndLabsInOrgUnitId(countryId)
@@ -140,11 +144,11 @@ export class CustomValidationForEventProgram {
         });
     }
 
-    private checkPeriod(events: Event[], period: string): ConsistencyError[] {
+    private checkPeriod(events: TrackerEvent[], period: string): ConsistencyError[] {
         const errors = _(
             events.map(event => {
                 const eventDate = new Date(event.occurredAt);
-                if (eventDate.getFullYear().toString() !== period) {
+                if (eventDate.getUTCFullYear().toString() !== period) {
                     return {
                         error: i18n.t(
                             `Event date is incorrect: Selected period : ${period}, date in file: ${event.occurredAt}`
@@ -166,7 +170,7 @@ export class CustomValidationForEventProgram {
         }));
     }
 
-    private checkUniqueEgaspId(fileEvents: Event[], existingEvents: Event[]): ConsistencyError[] {
+    private checkUniqueEgaspId(fileEvents: TrackerEvent[], existingEvents: TrackerEvent[]): ConsistencyError[] {
         //1. Egasp ids of events in file.
         const fileEgaspIDs = fileEvents.map(event => {
             const egaspDataElement = event?.dataValues?.find(dv => dv.dataElement === EGASP_DATAELEMENT_ID);
@@ -216,7 +220,10 @@ export class CustomValidationForEventProgram {
         return errors;
     }
 
-    private checkUniquePatientIdAndDate(fileEvents: Event[], existingEvents: Event[]): ConsistencyError[] {
+    private checkUniquePatientIdAndDate(
+        fileEvents: TrackerEvent[],
+        existingEvents: TrackerEvent[]
+    ): ConsistencyError[] {
         //1. Patient ids of events in file.
         const filePatientIDs = fileEvents.map(event => {
             const patientDataElement = event.dataValues.find(dv => dv.dataElement === PATIENT_DATAELEMENT_ID);

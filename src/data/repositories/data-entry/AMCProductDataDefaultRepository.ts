@@ -1,8 +1,8 @@
 import _ from "lodash";
-import { D2Api, MetadataPick } from "@eyeseetea/d2-api/2.34";
+import { D2Api, MetadataPick, SelectedPick } from "@eyeseetea/d2-api/2.34";
 import { Future, FutureData } from "../../../domain/entities/Future";
 import { SpreadsheetXlsxDataSource } from "../SpreadsheetXlsxDefaultRepository";
-import { D2TrackerTrackedEntity, TrackedEntitiesGetResponse } from "@eyeseetea/d2-api/api/trackerTrackedEntities";
+import { D2TrackerTrackedEntitySchema, TrackedEntitiesGetResponse } from "@eyeseetea/d2-api/api/trackerTrackedEntities";
 import { Id } from "../../../domain/entities/Ref";
 import {
     Attributes,
@@ -101,7 +101,7 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
 
     getProductRegisterAndRawProductConsumptionByProductIds(
         orgUnitId: Id,
-        productIds: string[],
+        productIds: Id[],
         period: string,
         productIdsChunkSize: number,
         chunked?: boolean
@@ -156,7 +156,6 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         return Future.sequential(
             chunkedProductIds.flatMap(productIdsChunk => {
                 const productIdsString = productIdsChunk.join(";");
-                const filter = `${AMR_GLASS_AMC_TEA_PRODUCT_ID}:IN:${productIdsString}`;
 
                 // TODO: change pageSize to skipPaging:true when new version of d2-api
                 return apiToFuture(
@@ -165,13 +164,15 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
                         program: AMC_PRODUCT_REGISTER_PROGRAM_ID,
                         programStage: AMC_RAW_PRODUCT_CONSUMPTION_STAGE_ID,
                         orgUnit: orgUnit,
-                        filter: filter,
+                        trackedEntity: productIdsString,
                         enrollmentEnrolledAfter: enrollmentEnrolledAfter,
                         enrollmentEnrolledBefore: enrollmentEnrolledBefore,
                         pageSize: productIdsChunk.length,
+                        ouMode: "SELECTED",
                     })
-                ).flatMap((trackedEntitiesResponse: TrackedEntitiesGetResponse) => {
-                    const productData = this.mapFromTrackedEntitiesToProductData(trackedEntitiesResponse.instances);
+                ).flatMap(trackedEntitiesResponse => {
+                    const d2TrackerEntities: D2TrackerEntity[] = trackedEntitiesResponse.instances;
+                    const productData = this.mapFromTrackedEntitiesToProductData(d2TrackerEntities);
                     return Future.success(productData);
                 });
             })
@@ -182,21 +183,20 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         orgUnit: Id,
         productIds: string[],
         period: string
-    ): Promise<D2TrackerTrackedEntity[]> {
-        const trackedEntities: D2TrackerTrackedEntity[] = [];
+    ): Promise<D2TrackerEntity[]> {
+        const trackedEntities: D2TrackerEntity[] = [];
         const pageSize = 250;
         const totalPages = Math.ceil(productIds.length / pageSize);
         let page = 1;
         let result;
         const productIdsString = productIds.join(";");
-        const filter = `${AMR_GLASS_AMC_TEA_PRODUCT_ID}:IN:${productIdsString}`;
         const enrollmentEnrolledAfter = `${period}-1-1`;
         const enrollmentEnrolledBefore = `${period}-12-31`;
 
         do {
             result = await this.getTrackedEntitiesOfPage({
                 orgUnit,
-                filter,
+                trackedEntity: productIdsString,
                 page,
                 pageSize,
                 enrollmentEnrolledBefore,
@@ -212,8 +212,8 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
     private async getAllProductRegisterAndRawProductConsumptionByPeriodAsync(
         orgUnit: Id,
         period: string
-    ): Promise<D2TrackerTrackedEntity[]> {
-        const trackedEntities: D2TrackerTrackedEntity[] = [];
+    ): Promise<D2TrackerEntity[]> {
+        const trackedEntities: D2TrackerEntity[] = [];
         const enrollmentEnrolledAfter = `${period}-1-1`;
         const enrollmentEnrolledBefore = `${period}-12-31`;
         const totalPages = true;
@@ -249,16 +249,17 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         orgUnit: Id;
         page: number;
         pageSize: number;
-        filter?: string;
+        trackedEntity?: string;
         totalPages?: boolean;
         enrollmentEnrolledAfter?: string;
         enrollmentEnrolledBefore?: string;
-    }): Promise<TrackedEntitiesGetResponse> {
+    }): Promise<TrackedEntitiesGetResponse<typeof trackedEntitiesFields>> {
         return this.api.tracker.trackedEntities
             .get({
                 fields: trackedEntitiesFields,
                 program: AMC_PRODUCT_REGISTER_PROGRAM_ID,
                 programStage: AMC_RAW_PRODUCT_CONSUMPTION_STAGE_ID,
+                ouMode: "SELECTED",
                 ...params,
             })
             .getData();
@@ -303,7 +304,7 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
         }
     }
 
-    private mapFromTrackedEntitiesToProductData(trackedEntities: D2TrackerTrackedEntity[]): ProductDataTrackedEntity[] {
+    private mapFromTrackedEntitiesToProductData(trackedEntities: D2TrackerEntity[]): ProductDataTrackedEntity[] {
         return trackedEntities
             .map(trackedEntity => {
                 if (trackedEntity.enrollments && trackedEntity.enrollments[0] && trackedEntity.attributes) {
@@ -376,6 +377,9 @@ export class AMCProductDataDefaultRepository implements AMCProductDataRepository
                             return {
                                 dataElement: id,
                                 value: dataValue.toString(),
+                                updatedAt: "",
+                                storedBy: "",
+                                createdAt: "",
                             };
                         }
                     );
@@ -427,6 +431,8 @@ const trackedEntitiesFields = {
         value: true,
     },
 } as const;
+
+type D2TrackerEntity = SelectedPick<D2TrackerTrackedEntitySchema, typeof trackedEntitiesFields>;
 
 const programFields = {
     id: true,

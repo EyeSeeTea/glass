@@ -1,4 +1,3 @@
-import { D2ValidationResponse } from "../../../../data/repositories/MetadataDefaultRepository";
 import { Future, FutureData } from "../../../entities/Future";
 import { ImportStrategy } from "../../../entities/data-entry/DataValuesSaveSummary";
 import { ConsistencyError, ImportSummary } from "../../../entities/data-entry/ImportSummary";
@@ -19,8 +18,8 @@ import { SampleDataRepository } from "../../../repositories/data-entry/SampleDat
 import { SampleData } from "../../../entities/data-entry/amr-external/SampleData";
 import { checkDuplicateRowsSAMPLE } from "../utils/checkDuplicateRows";
 
-const AMR_AMR_DS_Input_files_Sample_DS_ID = "OcAB7oaC072";
-const AMR_BATCHID_CC_ID = "rEMx3WFeLcU";
+export const AMR_AMR_DS_Input_files_Sample_DS_ID = "OcAB7oaC072";
+export const AMR_BATCHID_CC_ID = "rEMx3WFeLcU";
 
 export class ImportSampleFile {
     constructor(
@@ -29,6 +28,7 @@ export class ImportSampleFile {
         private dataValuesRepository: DataValuesRepository
     ) {}
 
+    // NOTICE: check also DeleteSampleDatasetUseCase.ts that contains same code adapted for node environment (only DELETE)
     public import(
         inputFile: File,
         batchId: string,
@@ -122,6 +122,7 @@ export class ImportSampleFile {
                             updated: 0,
                             ignored: 0,
                             deleted: 0,
+                            total: 0,
                         },
                         nonBlockingErrors: [],
                         blockingErrors: allBlockingErrors,
@@ -130,21 +131,21 @@ export class ImportSampleFile {
                     return Future.success(errorImportSummary);
                 }
 
-                /* eslint-disable no-console */
-                console.log({ sampleFileDataValues: dataValues });
-
                 const uniqueAOCs = _.uniq(dataValues.map(el => el.attributeOptionCombo || ""));
 
                 return this.dataValuesRepository.save(dataValues, action, dryRun).flatMap(saveSummary => {
                     return this.metadataRepository
-                        .validateDataSet(AMR_AMR_DS_Input_files_Sample_DS_ID, year.toString(), orgUnit, uniqueAOCs)
+                        .getValidationsDataSet(
+                            AMR_AMR_DS_Input_files_Sample_DS_ID,
+                            year.toString(),
+                            orgUnit,
+                            uniqueAOCs
+                        )
                         .flatMap(validationResponse => {
-                            const validations = validationResponse as D2ValidationResponse[];
+                            const validations = validationResponse;
 
                             const validationRulesIds: string[] = validations.flatMap(({ validationRuleViolations }) =>
-                                validationRuleViolations.map(
-                                    ruleViolation => (ruleViolation as any)?.validationRule?.id
-                                )
+                                validationRuleViolations.map(ruleViolation => ruleViolation?.validationRule?.id)
                             );
 
                             return this.metadataRepository

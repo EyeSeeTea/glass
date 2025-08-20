@@ -14,6 +14,7 @@ import "./App.css";
 import { AppConfig } from "./AppConfig";
 import muiThemeLegacy from "./themes/dhis2-legacy.theme";
 import { muiTheme } from "./themes/dhis2.theme";
+import sodium from "libsodium-wrappers";
 
 export interface AppProps {
     api: D2Api;
@@ -28,8 +29,10 @@ export const App: React.FC<AppProps> = React.memo(function App({ api, d2, instan
 
     useEffect(() => {
         async function setup() {
+            await sodium.ready;
             const compositionRoot = getCompositionRoot(instance);
             const { data: currentUser } = await compositionRoot.instance.getCurrentUser().runAsync();
+            const { data: allCountries } = await compositionRoot.countries.getAll().runAsync();
 
             if (!currentUser) throw new Error("User not logged in");
 
@@ -37,9 +40,9 @@ export const App: React.FC<AppProps> = React.memo(function App({ api, d2, instan
 
             // const isShareButtonVisible = _(appConfig).get("appearance.showShareButton") || false;
 
-            setAppContext({ api, currentUser, compositionRoot, instance: instance });
+            setAppContext({ api, currentUser, compositionRoot, instance: instance, allCountries: allCountries ?? [] });
             // setShowShareButton(isShareButtonVisible);
-            initFeedbackTool(d2, appConfig);
+            if (process.env.NODE_ENV !== "production") initFeedbackTool(d2, appConfig);
             setLoading(false);
         }
         setup();

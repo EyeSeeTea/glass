@@ -2,7 +2,7 @@ import { logger } from "../../../../utils/logger";
 import { Future, FutureData } from "../../../entities/Future";
 import { CODE_PRODUCT_NOT_HAVE_ATC, createAtcVersionKey } from "../../../entities/GlassAtcVersionData";
 import { Id } from "../../../entities/Ref";
-import { ImportSummary } from "../../../entities/data-entry/ImportSummary";
+import { ImportSummary, ImportSummaryWithEventIdList } from "../../../entities/data-entry/ImportSummary";
 import { GlassATCRepository } from "../../../repositories/GlassATCRepository";
 import { GlassDocumentsRepository } from "../../../repositories/GlassDocumentsRepository";
 import { GlassModuleRepository } from "../../../repositories/GlassModuleRepository";
@@ -10,7 +10,7 @@ import { GlassUploadsRepository } from "../../../repositories/GlassUploadsReposi
 import { MetadataRepository } from "../../../repositories/MetadataRepository";
 import { AMCSubstanceDataRepository } from "../../../repositories/data-entry/AMCSubstanceDataRepository";
 import { mapToImportSummary } from "../ImportBLTemplateEventProgram";
-import { getStringFromFile } from "../utils/fileToString";
+import { getStringFromFileBlob } from "../utils/fileToString";
 import { getConsumptionDataSubstanceLevel } from "./utils/getConsumptionDataSubstanceLevel";
 
 const IMPORT_SUMMARY_EVENT_TYPE = "event";
@@ -27,9 +27,14 @@ export class CalculateConsumptionDataSubstanceLevelUseCase {
     ) {}
 
     public execute(uploadId: Id, period: string, orgUnitId: Id, moduleName: string): FutureData<ImportSummary> {
-        return this.getEventsIdsFromUploadId(uploadId).flatMap(substanceIds => {
+        return this.getIdsInEventListUpload(uploadId).flatMap(substanceIds => {
+            if (!substanceIds.length) {
+                logger.error(`[${new Date().toISOString()}] Substances not found.`);
+                return Future.error("Substances not found.");
+            }
+
             logger.info(
-                `[${new Date().toISOString()}] Calculating consumption data in substance level for the following raw substance consumption data (total: ${
+                `[${new Date().toISOString()}] Calculating consumption data in substance level in org unit ${orgUnitId} and period ${period} for the following raw substance consumption data (total: ${
                     substanceIds.length
                 }): ${substanceIds.join(", ")}`
             );
@@ -87,6 +92,7 @@ export class CalculateConsumptionDataSubstanceLevelUseCase {
                                         imported: 0,
                                         deleted: 0,
                                         updated: 0,
+                                        total: 0,
                                     },
                                     nonBlockingErrors: [],
                                     blockingErrors: [],
@@ -131,9 +137,16 @@ export class CalculateConsumptionDataSubstanceLevelUseCase {
                                         response,
                                         IMPORT_SUMMARY_EVENT_TYPE,
                                         this.metadataRepository,
-                                        undefined,
-                                        eventIdLineNoMap
-                                    ).flatMap(summary => this.uploadIdListFileAndSave(uploadId, summary, moduleName));
+                                        {
+                                            eventIdLineNoMap,
+                                        }
+                                    ).flatMap(summary =>
+                                        this.uploadCalculatedEventListFileIdAndSaveInUploads(
+                                            uploadId,
+                                            summary,
+                                            moduleName
+                                        )
+                                    );
                                 });
                         });
                     });
@@ -142,20 +155,25 @@ export class CalculateConsumptionDataSubstanceLevelUseCase {
         });
     }
 
-    private getEventsIdsFromUploadId(uploadId: Id): FutureData<string[]> {
-        return this.glassUploadsRepository.getEventListFileIdByUploadId(uploadId).flatMap(eventListFileId => {
-            return this.glassDocumentsRepository.download(eventListFileId).flatMap(file => {
-                return Future.fromPromise(getStringFromFile(file)).flatMap(_events => {
-                    const eventIdList: string[] = JSON.parse(_events);
-                    return Future.success(eventIdList);
+    private getIdsInEventListUpload(uploadId: string): FutureData<Id[]> {
+        return this.glassUploadsRepository.getById(uploadId).flatMap(upload => {
+            if (!upload?.eventListFileId) {
+                logger.error(`[${new Date().toISOString()}] Cannot find upload with id ${uploadId}`);
+                return Future.error("Cannot find upload");
+            } else {
+                return this.glassDocumentsRepository.download(upload.eventListFileId).flatMap(listFileFileBlob => {
+                    return getStringFromFileBlob(listFileFileBlob).flatMap(idsList => {
+                        const ids: Id[] = JSON.parse(idsList);
+                        return Future.success(ids);
+                    });
                 });
-            });
+            }
         });
     }
 
-    private uploadIdListFileAndSave(
+    private uploadCalculatedEventListFileIdAndSaveInUploads(
         uploadId: string,
-        summary: { importSummary: ImportSummary; eventIdList: string[] },
+        summary: ImportSummaryWithEventIdList,
         moduleName: string
     ): FutureData<ImportSummary> {
         if (summary.eventIdList.length > 0 && uploadId) {

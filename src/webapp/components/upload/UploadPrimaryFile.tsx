@@ -8,30 +8,34 @@ import { Dropzone, DropzoneRef } from "../dropzone/Dropzone";
 import { FileRejection } from "react-dropzone";
 import { RemoveContainer, StyledRemoveButton } from "./UploadFiles";
 import { useAppContext } from "../../contexts/app-context";
-import { useCurrentDataSubmissionId } from "../../hooks/useCurrentDataSubmissionId";
 import { useCurrentModuleContext } from "../../contexts/current-module-context";
 import { useCurrentOrgUnitContext } from "../../contexts/current-orgUnit-context";
 import { EffectFn, useCallbackEffect } from "../../hooks/use-callback-effect";
 import { useCurrentPeriodContext } from "../../contexts/current-period-context";
 import { moduleProperties } from "../../../domain/utils/ModuleProperties";
+import { Maybe } from "../../../utils/ts-utils";
 interface UploadPrimaryFileProps {
     primaryFile: File | null;
     setPrimaryFile: React.Dispatch<React.SetStateAction<File | null>>;
+    setPrimaryFileTotalRows: React.Dispatch<React.SetStateAction<Maybe<number>>>;
     validate: (val: boolean) => void;
     batchId: string;
     removePrimaryFile: EffectFn<[event: React.MouseEvent<HTMLButtonElement, MouseEvent>]>;
     isLoading: boolean;
     setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+    dataSubmissionId: string | undefined;
 }
 
 export const UploadPrimaryFile: React.FC<UploadPrimaryFileProps> = ({
     primaryFile,
     setPrimaryFile,
+    setPrimaryFileTotalRows,
     validate,
     batchId,
     removePrimaryFile,
     isLoading,
     setIsLoading,
+    dataSubmissionId,
 }) => {
     const { compositionRoot } = useAppContext();
 
@@ -47,8 +51,6 @@ export const UploadPrimaryFile: React.FC<UploadPrimaryFileProps> = ({
     const snackbar = useSnackbar();
 
     const primaryFileUploadRef = useRef<DropzoneRef>(null);
-
-    const dataSubmissionId = useCurrentDataSubmissionId(moduleId, moduleName, orgUnitId, currentPeriod);
 
     const openFileUploadDialog = useCallback(async () => {
         primaryFileUploadRef.current?.openDialog();
@@ -73,8 +75,16 @@ export const UploadPrimaryFile: React.FC<UploadPrimaryFileProps> = ({
 
                     return compositionRoot.fileSubmission.validatePrimaryFile(uploadedPrimaryFile, moduleName).run(
                         primaryFileData => {
+                            if (!dataSubmissionId) {
+                                snackbar.error(i18n.t("Data submission id not found. Please try again"));
+                                setIsLoading(false);
+                                return;
+                            }
+
                             if (primaryFileData.isValid) {
                                 setPrimaryFile(uploadedPrimaryFile);
+                                setPrimaryFileTotalRows(primaryFileData.rows);
+
                                 const primaryFileType = moduleProperties.get(moduleName)?.primaryFileType;
                                 const data = {
                                     batchId,
@@ -93,8 +103,9 @@ export const UploadPrimaryFile: React.FC<UploadPrimaryFileProps> = ({
                                         localStorage.setItem("primaryUploadId", uploadId);
                                         setIsLoading(false);
                                     },
-                                    () => {
-                                        snackbar.error(i18n.t("Error in file upload"));
+                                    error => {
+                                        console.error(`Error in file upload: ${error}`);
+                                        snackbar.error(i18n.t(`Error in file upload: ${error}`));
                                         setIsLoading(false);
                                     }
                                 );
@@ -123,6 +134,7 @@ export const UploadPrimaryFile: React.FC<UploadPrimaryFileProps> = ({
             orgUnitId,
             setIsLoading,
             setPrimaryFile,
+            setPrimaryFileTotalRows,
             snackbar,
         ]
     );
@@ -142,7 +154,7 @@ export const UploadPrimaryFile: React.FC<UploadPrimaryFileProps> = ({
                     className="choose-file-button"
                     endIcon={<BackupIcon />}
                     onClick={openFileUploadDialog}
-                    disabled={primaryFile === null ? false : true}
+                    disabled={!dataSubmissionId || (primaryFile === null ? false : true)}
                 >
                     {i18n.t("Select file")}
                 </Button>

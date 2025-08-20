@@ -179,8 +179,8 @@ export class QuestionnaireD2DefaultRepository implements QuestionnaireRepository
         }
     }
 
-    saveResponse(questionnaire: QuestionnaireSelector, question: Question): FutureData<void> {
-        const dataValues = this.getDataValuesForQuestion(questionnaire, question);
+    saveResponse(questionnaire: QuestionnaireSelector, questions: Question[]): FutureData<void> {
+        const dataValues = this.getDataValuesForQuestions(questionnaire, questions);
         return this.postDataValues(dataValues);
     }
 
@@ -288,6 +288,10 @@ export class QuestionnaireD2DefaultRepository implements QuestionnaireRepository
         }
     }
 
+    private getDataValuesForQuestions(questionnaire: QuestionnaireSelector, questions: Question[]): D2DataValue[] {
+        return questions.flatMap(question => this.getDataValuesForQuestion(questionnaire, question));
+    }
+
     private getDataValuesForQuestion(questionnaire: QuestionnaireSelector, question: Question): D2DataValue[] {
         const { type } = question;
         const { orgUnitId, year } = questionnaire;
@@ -304,18 +308,23 @@ export class QuestionnaireD2DefaultRepository implements QuestionnaireRepository
                     const isSelected = question.value?.id === option.id;
                     return {
                         ...base,
-                        value: isSelected ? "true" : "",
+                        // value: isSelected ? "true" : "",
+                        // passing value: "" for YES_ONLY dataElements will cause 409 errors in dhis2 > 2.39 because of an unhandled NullPointerException
+                        // we pass "true" as a dummy value to circumvent this and use the deleted flag
+                        value: "true",
                         categoryOptionCombo: option.id,
                         ...deleted(!isSelected),
                     };
                 });
             case "boolean": {
-                const strValue = question.value ? "true" : question.storeFalse ? "false" : "";
+                // value: "" for YES_ONLY dataElements will cause 409 errors in dhis2 > 2.39 because of an unhandled NullPointerException
+                // we pass "true" as a dummy value to circumvent this and use the deleted flag
+                const strValue = question.value ? "true" : question.storeFalse ? "false" : "true";
                 return [
                     {
                         ...base,
                         value: strValue,
-                        ...deleted(!strValue),
+                        ...deleted(!question.value && !question.storeFalse),
                     },
                 ];
             }
@@ -337,12 +346,14 @@ export class QuestionnaireD2DefaultRepository implements QuestionnaireRepository
                     },
                 ];
             case "singleCheck": {
-                const strValue = question.value ? "true" : question.storeFalse ? "false" : "";
+                // value: "" for YES_ONLY dataElements will cause 409 errors in dhis2 > 2.39 because of an unhandled NullPointerException
+                // we pass "true" as a dummy value to circumvent this and use the deleted flag
+                const strValue = question.value ? "true" : question.storeFalse ? "false" : "true";
                 return [
                     {
                         ...base,
                         value: strValue,
-                        ...deleted(!strValue),
+                        ...deleted(!question.value && !question.storeFalse),
                     },
                 ];
             }

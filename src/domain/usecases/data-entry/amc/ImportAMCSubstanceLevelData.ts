@@ -2,13 +2,14 @@ import { ImportStrategy } from "../../../entities/data-entry/DataValuesSaveSumma
 import { ImportSummary } from "../../../entities/data-entry/ImportSummary";
 import { FutureData } from "../../../entities/Future";
 import { ExcelRepository } from "../../../repositories/ExcelRepository";
-import { InstanceDefaultRepository } from "../../../../data/repositories/InstanceDefaultRepository";
 import { GlassDocumentsRepository } from "../../../repositories/GlassDocumentsRepository";
 import { GlassUploadsRepository } from "../../../repositories/GlassUploadsRepository";
 import { Dhis2EventsDefaultRepository } from "../../../../data/repositories/Dhis2EventsDefaultRepository";
 import { MetadataRepository } from "../../../repositories/MetadataRepository";
 import { ImportBLTemplateEventProgram } from "../ImportBLTemplateEventProgram";
 import { ProgramRulesMetadataRepository } from "../../../repositories/program-rules/ProgramRulesMetadataRepository";
+import { GlassATCRepository } from "../../../repositories/GlassATCRepository";
+import { InstanceRepository } from "../../../repositories/InstanceRepository";
 
 export const AMC_RAW_SUBSTANCE_CONSUMPTION_PROGRAM_ID = "q8aSKr17J5S";
 export const AMC_SUBSTANCE_CALCULATED_CONSUMPTION_PROGRAM_ID = "eUmWZeKZNrg";
@@ -16,12 +17,13 @@ export const AMC_SUBSTANCE_CALCULATED_CONSUMPTION_PROGRAM_ID = "eUmWZeKZNrg";
 export class ImportAMCSubstanceLevelData {
     constructor(
         private excelRepository: ExcelRepository,
-        private instanceRepository: InstanceDefaultRepository,
+        private instanceRepository: InstanceRepository,
         private glassDocumentsRepository: GlassDocumentsRepository,
         private glassUploadsRepository: GlassUploadsRepository,
         private dhis2EventsDefaultRepository: Dhis2EventsDefaultRepository,
         private metadataRepository: MetadataRepository,
-        private programRulesMetadataRepository: ProgramRulesMetadataRepository
+        private programRulesMetadataRepository: ProgramRulesMetadataRepository,
+        private glassAtcRepository: GlassATCRepository
     ) {}
 
     public import(
@@ -41,7 +43,8 @@ export class ImportAMCSubstanceLevelData {
             this.glassUploadsRepository,
             this.dhis2EventsDefaultRepository,
             this.metadataRepository,
-            this.programRulesMetadataRepository
+            this.programRulesMetadataRepository,
+            this.glassAtcRepository
         );
 
         return importBLTemplateEventProgram.import(

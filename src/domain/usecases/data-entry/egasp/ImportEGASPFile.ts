@@ -8,8 +8,10 @@ import { GlassUploadsRepository } from "../../../repositories/GlassUploadsReposi
 import { ProgramRulesMetadataRepository } from "../../../repositories/program-rules/ProgramRulesMetadataRepository";
 import { MetadataRepository } from "../../../repositories/MetadataRepository";
 import { EGASP_PROGRAM_ID } from "../../../../data/repositories/program-rule/ProgramRulesMetadataDefaultRepository";
-import { InstanceDefaultRepository } from "../../../../data/repositories/InstanceDefaultRepository";
 import { ImportBLTemplateEventProgram } from "../ImportBLTemplateEventProgram";
+import { InstanceRepository } from "../../../repositories/InstanceRepository";
+import { GlassATCRepository } from "../../../repositories/GlassATCRepository";
+import { EncryptionRepository } from "../../../repositories/EncryptionRepository";
 
 export class ImportEGASPFile {
     constructor(
@@ -20,7 +22,9 @@ export class ImportEGASPFile {
         private glassUploadsRepository: GlassUploadsRepository,
         private programRulesMetadataRepository: ProgramRulesMetadataRepository,
         private metadataRepository: MetadataRepository,
-        private instanceRepository: InstanceDefaultRepository
+        private instanceRepository: InstanceRepository,
+        private glassAtcRepository: GlassATCRepository,
+        private encryptionRepository: EncryptionRepository
     ) {}
 
     public importEGASPFile(
@@ -39,19 +43,24 @@ export class ImportEGASPFile {
             this.glassUploadsRepository,
             this.dhis2EventsDefaultRepository,
             this.metadataRepository,
-            this.programRulesMetadataRepository
+            this.programRulesMetadataRepository,
+            this.glassAtcRepository
         );
 
-        return importBLTemplateEventProgram.import(
-            file,
-            action,
-            eventListId,
-            moduleName,
-            orgUnitId,
-            orgUnitName,
-            period,
-            EGASP_PROGRAM_ID,
-            "primaryUploadId"
-        );
+        return this.encryptionRepository.getEncryptionData().flatMap(encryptionData => {
+            return importBLTemplateEventProgram.import(
+                file,
+                action,
+                eventListId,
+                moduleName,
+                orgUnitId,
+                orgUnitName,
+                period,
+                EGASP_PROGRAM_ID,
+                "primaryUploadId",
+                undefined,
+                encryptionData
+            );
+        });
     }
 }

@@ -19,6 +19,8 @@ export const DEFAULT_SALT_CODE = "XXXX";
 export const CODE_PRODUCT_NOT_HAVE_ATC = "Z99ZZ99";
 export const COMB_CODE_PRODUCT_NOT_HAVE_ATC = "Z99ZZ99_99";
 
+export type ATCVersionKey = string;
+
 export type ATCCodeLevel5 = string;
 
 export type RouteOfAdministrationCode = string;
@@ -101,7 +103,7 @@ export type DDDChangesData = {
 
 export type ATCChangesData = {
     CATEGORY: "ATC";
-    CHANGE: string;
+    CHANGE: string; // TODO: Add what are the possible values
     INFO: string | null;
     NEW_ATC: ATCCodeLevel5;
     NEW_NAME: string | null;
@@ -185,15 +187,22 @@ export type GlassAtcVersionData = AtcDddIndexData & {
     aware_classification: AwareClassificationData;
 };
 
-export type ListGlassATCVersions = Record<string, GlassAtcVersionData>;
+export type ListGlassATCVersions = Record<ATCVersionKey, GlassAtcVersionData>;
 
-export function validateAtcVersion(atcVersionKey: string): boolean {
+export type ListGlassATCLastVersionKeysByYear = Record<string, ATCVersionKey>;
+
+export function validateAtcVersion(atcVersionKey: ATCVersionKey): boolean {
     const pattern = /^ATC-\d{4}-v\d+$/;
     return pattern.test(atcVersionKey);
 }
 
-export function createAtcVersionKey(year: number, version: number): string {
+export function createAtcVersionKey(year: number, version: number): ATCVersionKey {
     return `ATC-${year.toString()}-v${version.toString()}`;
+}
+
+export function getYearFromAtcVersionKey(key: ATCVersionKey): number | undefined {
+    const year = key.split("-")[1];
+    if (year) return parseInt(year);
 }
 
 export function getDDDChanges(changesData: ATCAndDDDChangesData[]): DDDChangesData[] {
@@ -254,6 +263,62 @@ export function getNewAtcCode(
     })?.NEW_ATC;
 }
 
+/**
+ * Get the corresponding ATC code in the current ATC version of an ATC code defined in an old ATC version.
+ *
+ * @param {ATCCodeLevel5} oldAtcCode - The old ATC code
+ * @param {ATCChangesData[]} AtcChanges - The list of ATC changes
+ * @param {ATCData[]} currentAtcs - The list of current ATC codes
+ *
+ * @return {ATCCodeLevel5 | undefined} - the current ATC code or undefined if no correspondance.
+ */
+export function getNewAtcCodeRec( // Todo: replace getNewAtcCode by this function
+    oldAtcCode: ATCCodeLevel5,
+    atcChanges: ATCChangesData[],
+    currentAtcs: ATCData[]
+): ATCCodeLevel5 | undefined {
+    function findAtcCodeCurrent(atcCode: ATCCodeLevel5): string | undefined {
+        const newAtc = atcChanges.find(({ PREVIOUS_ATC, CHANGE }) => {
+            return CHANGE !== "SUPERSEDED" && PREVIOUS_ATC === atcCode;
+        })?.NEW_ATC;
+        if (newAtc === undefined) {
+            return undefined;
+        }
+        const foundAtcInCurrent = currentAtcs.find(({ CODE }: ATCData) => {
+            return CODE === atcCode;
+        })?.CODE;
+        if (foundAtcInCurrent === undefined) {
+            return findAtcCodeCurrent(newAtc);
+        } else {
+            return foundAtcInCurrent;
+        }
+    }
+    return findAtcCodeCurrent(oldAtcCode);
+}
+
+/**
+ * Get the DDD for an ATC code, ROA code and SALT code based on an specific ATC version.
+ *
+ * @param {ATCCodeLevel5} oldCode - The ATC code
+ * @param {RouteOfAdministrationCode} roaCode - The ROA code
+ * @param {SaltCode} saltCode - The Salt code
+ * @param {GlassAtcVersionData} atcVersion - The ATC version
+ *
+ * @return {DDDData | undefined} - the corresponding DDD.
+ */
+export function getDDDForAtcVersion(
+    atcCode: ATCCodeLevel5,
+    roaCode: RouteOfAdministrationCode,
+    saltCode: SaltCode,
+    atcVersion: GlassAtcVersionData
+) {
+    const ddds = atcVersion.ddds.filter(({ ATC5, ROA, SALT }: DDDData) => {
+        return ATC5 === atcCode && ROA === roaCode && SALT === saltCode;
+    });
+    if (ddds.length === 0) return undefined;
+    return ddds[0];
+}
+
 export function getNewDddData(
     atcCode: ATCCodeLevel5,
     roa: RouteOfAdministrationCode,
@@ -265,16 +330,26 @@ export function getNewDddData(
 }
 
 export function getAmClass(amClassData: AmClassificationData, atcCode: ATCCodeLevel5): AmName | undefined {
-    const atcAwareCode = amClassData.atc_am_mapping.find(({ ATCS }) => {
-        return ATCS.some(atc => {
+    const atcAwareCodeFullyFound = amClassData.atc_am_mapping.find(({ ATCS }) =>
+        ATCS.some(atc => atcCode === atc)
+    )?.CODE;
+
+    if (atcAwareCodeFullyFound) {
+        return amClassData.classification.find(({ CODE }) => CODE === atcAwareCodeFullyFound)?.NAME;
+    }
+
+    const atcAwareCodeFoundByPrefix = amClassData.atc_am_mapping.find(({ ATCS }) =>
+        ATCS.some(atc => {
             if (atc.endsWith("*")) {
                 const prefix = atc.slice(0, -1);
                 return atcCode.startsWith(prefix);
             }
-            return atcCode === atc;
-        });
-    })?.CODE;
-    return amClassData.classification.find(({ CODE }) => CODE === atcAwareCode)?.NAME;
+        })
+    )?.CODE;
+
+    if (atcAwareCodeFoundByPrefix) {
+        return amClassData.classification.find(({ CODE }) => CODE === atcAwareCodeFoundByPrefix)?.NAME;
+    }
 }
 
 export function getAwareClass(awareClassData: AwareClassificationData, atcCode: ATCCodeLevel5): AwrName | undefined {
